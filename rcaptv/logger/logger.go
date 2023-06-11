@@ -6,22 +6,24 @@ import (
 	"github.com/rs/zerolog/pkgerrors"
 )
 
-var (
-	LogLevel int8
-)
-
 func SetupLogger() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
+}
 
-	zerolog.SetGlobalLevel(zerolog.Level(LogLevel))
+func SetLevel(lvl int8) {
+	zerolog.SetGlobalLevel(zerolog.Level(lvl))
 }
 
 func New(cmd, ctx string) zerolog.Logger {
-	logger := log.With().
-		Str("cmd", cmd).
-		Str("ctx", ctx).
-		Logger()
+	logger := log.With()
 
-	return logger
+	if cmd != "" {
+		logger = logger.Str("cmd", cmd)
+	}
+	if ctx != "" {
+		logger = logger.Str("ctx", ctx)
+	}
+
+	return logger.Logger()
 }

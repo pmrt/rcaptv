@@ -81,7 +81,7 @@ func conv(v string, to reflect.Kind) any {
 
 	l.Panic().
 		Err(err).
-		Str("context", "config").
+		Str("ctx", "config").
 		Msg("")
 	return nil
 }
@@ -90,7 +90,7 @@ func Env[T SupportStringconv](key string, def T) T {
 	if v, ok := os.LookupEnv(key); ok {
 		val := conv(v, reflect.TypeOf(def).Kind()).(T)
 		l.Debug().
-			Str("context", "config").
+			Str("ctx", "config").
 			Msgf("=> [%s]: %v", key, val)
 		return val
 	}
@@ -99,7 +99,7 @@ func Env[T SupportStringconv](key string, def T) T {
 
 func LoadVars() {
 	l := l.With().
-		Str("context", "config").
+		Str("ctx", "config").
 		Logger()
 
 	if err := godotenv.Load(); err != nil {
@@ -120,7 +120,7 @@ func LoadVars() {
 	PostgresConnMaxLifetimeMinutes = Env("POSTGRES_CONN_MAX_LIFETIME_MINUTES", 60)
 	PostgresConnTimeoutSeconds = Env("POSTGRES_CONN_TIMEOUT_SECONDS", 60)
 	PostgresMigVersion = Env("POSTGRES_MIG_VERSION", LastMigrationVersion)
-	PostgresMigPath = Env("POSTGRES_MIG_VERSION", "database/postgres/migrations")
+	PostgresMigPath = Env("POSTGRES_MIG_PATH", "database/postgres/migrations")
 
 	HelixClientID = Env("HELIX_CLIENT_ID", "fake_client_id")
 	HelixSecret = Env("HELIX_SECRET", "fake_secret")
@@ -128,14 +128,14 @@ func LoadVars() {
 	SkipMigrations = Env("SKIP_MIGRATIONS", false)
 
 	Debug = Env("DEBUG", false)
-	logger.LogLevel = Env("LOG_LEVEL", int8(zerolog.InfoLevel))
+	logger.SetLevel(Env("LOG_LEVEL", int8(zerolog.InfoLevel)))
 	if !IsProd {
 		Debug = Env("DEBUG", true)
-		logger.LogLevel = Env("LOG_LEVEL", int8(zerolog.DebugLevel))
+		logger.SetLevel(Env("LOG_LEVEL", int8(zerolog.DebugLevel)))
 	}
 }
 
 func Setup() {
-	LoadVars()
 	logger.SetupLogger()
+	LoadVars()
 }

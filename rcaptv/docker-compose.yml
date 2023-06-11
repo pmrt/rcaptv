@@ -1,0 +1,44 @@
+version: '3.9'
+services:
+  pg_db:
+    image: postgres
+    restart: always
+    ports:
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
+    volumes:
+      - ./.volumes/postgres:/var/lib/postgresql/data
+    networks:
+      - net1
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB_NAME=${POSTGRES_DB_NAME}
+
+  tracker:
+    depends_on:
+      - pg_db
+    build: .
+    networks:
+      - net1
+    environment:
+      - POSTGRES_HOST=pg_db
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB_NAME=${POSTGRES_DB_NAME}
+      - POSTGRES_MAX_IDLE_CONNS=${POSTGRES_MAX_IDLE_CONNS}
+      - POSTGRES_MAX_OPEN_CONNS=${POSTGRES_MAX_OPEN_CONNS}
+      - POSTGRES_CONN_MAX_LIFETIME_MINUTES=${POSTGRES_CONN_MAX_LIFETIME_MINUTES}
+      - POSTGRES_CONN_TIMEOUT_SECONDS=${POSTGRES_CONN_TIMEOUT_SECONDS}
+      - POSTGRES_MIG_VERSION=${POSTGRES_MIG_VERSION}
+      - POSTGRES_MIG_PATH=${POSTGRES_MIG_PATH}
+      - SKIP_MIGRATIONS=${SKIP_MIGRATIONS}
+      - DEBUG=${DEBUG}
+
+      - HELIX_CLIENT_ID=${HELIX_CLIENT_ID}
+      - HELIX_SECRET=${HELIX_SECRET}
+
+      - API_PORT=${API_PORT}
+
+networks:
+  net1:
