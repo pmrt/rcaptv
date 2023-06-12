@@ -126,6 +126,19 @@ func TestHelixCreateEventsubSubscription(t *testing.T) {
 	}
 }
 
+func TestUntilRatelimitReset(t *testing.T) {
+	now := time.Now()
+	resetAt := now.Add(time.Second * 10).Unix()
+	reset, err := untilRatelimitReset(fmt.Sprint(resetAt), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	diff := reset - (time.Second * time.Duration(10))
+	if diff.Abs() > time.Second {
+		t.Fatal("expected reset delay to be within 1s of expected value")
+	}
+}
+
 func TestHelixRateLimitedResiliency(t *testing.T) {
 	const (
 		broadcasterid = "1234"
