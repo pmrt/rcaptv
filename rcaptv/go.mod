@@ -28,6 +28,7 @@ require (
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/mitchellh/mapstructure v1.4.1 // indirect
 	github.com/moby/term v0.5.0 // indirect
+	github.com/montanaflynn/stats v0.7.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.2 // indirect
 	github.com/opencontainers/runc v1.1.5 // indirect
@@ -36,6 +37,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rs/zerolog v1.29.1 // indirect
 	github.com/sirupsen/logrus v1.9.2 // indirect
+	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/stretchr/testify v1.8.2 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
