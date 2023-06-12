@@ -74,8 +74,6 @@ func (bs *BalancedSchedule) RealTime() <-chan RealTimeMinute {
 //
 // The scheduler must be stopped with bs.Cancel()
 func (bs *BalancedSchedule) Start() {
-	bs.realTime = make(chan RealTimeMinute)
-	bs.cancelRealTime = make(chan struct{})
 	go func() {
 		m := ResetMinute
 		max := Minute(bs.opts.CycleSize - 1)
@@ -121,6 +119,8 @@ func newBalancedSchedule(opts BalancedScheduleOpts) *BalancedSchedule {
 	for min := range bs.schedule {
 		bs.schedule[min] = make([]string, 0, opts.EstimatedStreamers/opts.CycleSize)
 	}
+	bs.realTime = make(chan RealTimeMinute)
+	bs.cancelRealTime = make(chan struct{}, 1)
 
 	return bs
 }
