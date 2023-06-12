@@ -26,11 +26,14 @@ var (
 	PostgresMigVersion             int
 	PostgresMigPath                string
 
-	HelixClientID string
-	HelixSecret   string
+	HelixClientID    string
+	HelixSecret      string
+	TestClientID     string
+	TestClientSecret string
 
 	SkipMigrations bool
 
+	APIUrl  string
 	APIPort string
 
 	TrackIntervalMinutes int
@@ -124,8 +127,13 @@ func LoadVars() {
 
 	HelixClientID = Env("HELIX_CLIENT_ID", "fake_client_id")
 	HelixSecret = Env("HELIX_SECRET", "fake_secret")
+	TestClientID = Env("TEST_CLIENT_ID", "fake_client_id")
+	TestClientSecret = Env("TEST_CLIENT_SECRET", "fake_secret")
 
 	SkipMigrations = Env("SKIP_MIGRATIONS", false)
+
+	APIPort = Env("API_PORT", "8080")
+	APIUrl = Env("API_URL", "https://api.twitch.tv/helix")
 
 	Debug = Env("DEBUG", false)
 	logger.SetLevel(Env("LOG_LEVEL", int8(zerolog.InfoLevel)))
