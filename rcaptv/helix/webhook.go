@@ -2,6 +2,11 @@ package helix
 
 import "time"
 
+const (
+	SubStreamOnline  string = "stream.online"
+	SubStreamOffline string = "stream.offline"
+)
+
 type WebhookNotificationPayload struct {
 	Subscription *Subscription `json:"subscription"`
 	Event        struct {

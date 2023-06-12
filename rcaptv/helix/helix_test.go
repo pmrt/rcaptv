@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/go-test/deep"
 )
@@ -75,4 +77,109 @@ func TestHelixCredentials(t *testing.T) {
 	if resp.Request.Header.Get("Authorization") == "" {
 		t.Fatal("expected authorization request header to not be empty")
 	}
+}
+
+func TestHelixCreateEventsubSubscription(t *testing.T) {
+	const (
+		broadcasterid = "1234"
+		cb            = "http://localhost/webhook"
+		secret        = "thisisanososecretsecret"
+	)
+
+	wantJson := `{"type":"stream.online","version":"1","condition":{"broadcaster_user_id":"1234"},"transport":{"method":"webhook","callback":"http://localhost/webhook","secret":"thisisanososecretsecret"}}` + string('\n')
+
+	var body []byte
+	sv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Log(err)
+		}
+		body = b
+	}))
+	defer sv.Close()
+	hx := &Helix{
+		opts: &HelixOpts{
+			APIUrl:           sv.URL,
+			EventsubEndpoint: "/eventsub",
+		},
+		c: sv.Client(),
+	}
+	err := hx.CreateEventsubSubscription(&Subscription{
+		Type:    SubStreamOnline,
+		Version: "1",
+		Condition: &Condition{
+			BroadcasterUserID: broadcasterid,
+		},
+		Transport: &Transport{
+			Method:   "webhook",
+			Callback: cb,
+			Secret:   secret,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, want := string(body), wantJson
+	if got != want {
+		t.Fatalf("got:\n\n%s (%d)\nwant:\n\n%s (%d)", got, len(got), want, len(want))
+	}
+}
+
+func TestHelixRateLimitedResiliency(t *testing.T) {
+	const (
+		broadcasterid = "1234"
+		cb            = "http://localhost/webhook"
+		secret        = "thisisanososecretsecret"
+	)
+
+	resetAfter := time.Duration(3) * time.Second
+	reqs := 0
+	attempts := 0
+	sv := httptest.NewServer(http.HandlerFunc(func(resp http.ResponseWriter, r *http.Request) {
+		reqs++
+		if attempts == 0 {
+			attempts++
+			now := time.Now()
+			resp.Header().Set("Ratelimit-Reset", fmt.Sprint(now.Add(resetAfter).Unix()))
+			resp.Header().Set("Date", now.Format(time.RFC1123))
+			resp.WriteHeader(http.StatusTooManyRequests)
+		}
+	}))
+	defer sv.Close()
+	hx := &Helix{
+		opts: &HelixOpts{
+			APIUrl:           sv.URL,
+			EventsubEndpoint: "/eventsub",
+		},
+		c: sv.Client(),
+	}
+
+	start := time.Now()
+	err := hx.CreateEventsubSubscription(&Subscription{
+		Type:    SubStreamOnline,
+		Version: "1",
+		Condition: &Condition{
+			BroadcasterUserID: broadcasterid,
+		},
+		Transport: &Transport{
+			Method:   "webhook",
+			Callback: cb,
+			Secret:   secret,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	end := time.Now()
+
+	if reqs != 2 {
+		t.Fatal("expected exactly 2 requests to server")
+	}
+	took := end.Sub(start)
+	diff := took - (resetAfter + time.Second)
+	if diff.Abs() > time.Millisecond*100 {
+		t.Fatal("expected reset delay to be within 100ms of expected value")
+	}
+
 }
