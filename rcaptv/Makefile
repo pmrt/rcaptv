@@ -1,5 +1,6 @@
 #!make
 include .env
+export
 
 pgmigrations := $(wildcard ./database/postgres/migrations/*.sql)
 
@@ -19,7 +20,11 @@ pgdown:
 	migrate -path database/postgres/migrations -database postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB_NAME}?sslmode=disable down 1
 # migrate postgres 1 step up
 pgup:
-	migrate -path ./database/postgres/migrations -database postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB_NAME}?sslmode=disable up 1
+	# migrate -path ./database/postgres/migrations -database postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB_NAME}?sslmode=disable up 1
+	
+test:
+	go clean -testcache
+	go test -timeout 30s -v ./...
 
 tools:
 # Jet cli for generating types for SQL

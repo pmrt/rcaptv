@@ -37,7 +37,9 @@ services:
 
       - HELIX_CLIENT_ID=${HELIX_CLIENT_ID}
       - HELIX_SECRET=${HELIX_SECRET}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
 
+      - API_URL=${API_URL}
       - API_PORT=${API_PORT}
 
 networks:

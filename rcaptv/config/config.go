@@ -30,6 +30,7 @@ var (
 	HelixSecret      string
 	TestClientID     string
 	TestClientSecret string
+	WebhookSecret    string
 
 	SkipMigrations bool
 
@@ -129,6 +130,7 @@ func LoadVars() {
 	HelixSecret = Env("HELIX_SECRET", "fake_secret")
 	TestClientID = Env("TEST_CLIENT_ID", "fake_client_id")
 	TestClientSecret = Env("TEST_CLIENT_SECRET", "fake_secret")
+	WebhookSecret = Env("WEBHOOK_SECRET", "fake_secret")
 
 	SkipMigrations = Env("SKIP_MIGRATIONS", false)
 

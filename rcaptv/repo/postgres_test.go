@@ -2,7 +2,9 @@ package repo
 
 import (
 	"database/sql"
+	"errors"
 	"log"
+	"net"
 	"os"
 	"testing"
 	"time"
@@ -35,6 +37,10 @@ func TestMain(m *testing.M) {
 		hc.RestartPolicy = docker.RestartPolicy{Name: "no"}
 	})
 	if err != nil {
+		var opErr *net.OpError
+		if errors.As(err, &opErr) {
+			log.Fatal("could not connect to docker. Is docker service running?")
+		}
 		panic(err)
 	}
 	res.Expire(120)
