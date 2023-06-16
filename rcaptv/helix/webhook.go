@@ -203,3 +203,14 @@ func (h *WebhookHandler) handleEvent(resp *WebhookNotificationPayload) error {
 
 	return nil
 }
+
+func (hx *Helix) WebhookHandler(webhookSecret []byte, fakeNow ...time.Time) func(c *fiber.Ctx) error {
+	h := &WebhookHandler{
+		hx:     hx,
+		secret: webhookSecret,
+	}
+	if len(fakeNow) == 1 {
+		h.fakeNow = fakeNow[0]
+	}
+	return h.handler
+}

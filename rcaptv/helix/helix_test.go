@@ -194,5 +194,4 @@ func TestHelixRateLimitedResiliency(t *testing.T) {
 	if diff.Abs() > time.Millisecond*100 {
 		t.Fatal("expected reset delay to be within 100ms of expected value")
 	}
-
 }

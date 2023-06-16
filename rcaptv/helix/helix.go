@@ -1,18 +1,25 @@
 package helix
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
 	"golang.org/x/oauth2/clientcredentials"
 	"golang.org/x/oauth2/twitch"
+)
+
+const (
+	_        = iota
+	KB int64 = 1 << (10 * iota)
+	MB
+	GB
 )
 
 const EstimatedSubscriptionJSONSize = 350
@@ -21,15 +28,40 @@ const EstimatedSubscriptionJSONSize = 350
 // client
 const HttpMaxAttempts = 3
 const HttpRetryDelay = time.Second * 5
+const HttpMaxClientResponseReadLimitBytes = 1 * MB
 
 var (
 	ErrTooManyRequestAttempts = errors.New("no attempts left for performing requests")
 	ErrUnauthorized           = errors.New("unauthorized")
 	ErrUnexpectedStatusCode   = errors.New("unexpected status code")
+	ErrBodyResponseTooBig     = errors.New("response body too big")
+	ErrBodyEmpty              = errors.New("response body empty")
 )
+
+type HttpResponse struct {
+	Body       []byte
+	StatusCode int
+}
 
 type ClientCreds struct {
 	ClientID, ClientSecret string
+}
+
+type Pagination struct {
+	Cursor string
+}
+
+// modReqQuery provides a way to easily edit a particular parameter in a `req`
+// request.
+func modReqQuery(req *http.Request, key, value string) error {
+	values, err := url.ParseQuery(req.URL.RawQuery)
+	if err != nil {
+		return err
+	}
+	values.Set(key, value)
+	req.URL.RawQuery = values.Encode()
+
+	return nil
 }
 
 type HelixOpts struct {
@@ -52,43 +84,6 @@ type Helix struct {
 	c    *http.Client
 }
 
-func (hx *Helix) CreateEventsubSubscription(sub *Subscription) error {
-	b := struct {
-		Type      string     `json:"type"`
-		Version   string     `json:"version"`
-		Condition *Condition `json:"condition"`
-		Transport *Transport `json:"transport"`
-	}{
-		Type:      sub.Type,
-		Version:   sub.Version,
-		Condition: sub.Condition,
-		Transport: sub.Transport,
-	}
-
-	buf := bytes.NewBuffer(make([]byte, 0, EstimatedSubscriptionJSONSize))
-	if err := json.NewEncoder(buf).Encode(b); err != nil {
-		return err
-	}
-	req, err := http.NewRequest(
-		"POST",
-		hx.opts.APIUrl+hx.opts.EventsubEndpoint+"/subscriptions",
-		buf,
-	)
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := hx.Do(req)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return errors.New("Expected 200 response, got " + fmt.Sprint(resp.StatusCode))
-	}
-	return nil
-}
-
 // Do handles some errors for resiliency and retries if possible. If
 // Ratelimit-reset header is present during TooManyRequests errors it will
 // retry after the reset time
@@ -97,11 +92,71 @@ func (hx *Helix) CreateEventsubSubscription(sub *Subscription) error {
 // HttpRetryDelay controls the delay before a retry for 5XX errors.
 //
 // Do not use the body of the response as it will already be processed.
-func (hx *Helix) Do(req *http.Request) (*http.Response, error) {
+func (hx *Helix) Do(req *http.Request) (*HttpResponse, error) {
 	return hx.doAtMost(req, HttpMaxAttempts)
 }
 
-func (hx *Helix) doAtMost(req *http.Request, attempts int) (*http.Response, error) {
+type PaginationManyObj[T any] struct {
+	Data       []T
+	Pagination *Pagination
+}
+
+// Do handles a http request with twitch pagination.
+//
+// stopFunc(item, all) is called after reading and adding each item to the all
+// slice. The boolean value returned by the stopFunc() defines when to stop
+// performing more requests.
+//
+// If stopFunc() returns false and all the elements in the request are
+// processed, DoWithPagination will perform a new request using the cursor from
+// the previous one. If stopFunc() returns true while processing a element, the
+// loop will break and no more requests will be performed.
+func DoWithPagination[T any](hx *Helix, req *http.Request, stopFunc func(item T, all []T) bool) ([]T, error) {
+	var (
+		resp   *HttpResponse
+		parsed *PaginationManyObj[T]
+		err    error
+		// Twitch page size is 100 items max
+		all = make([]T, 0, 100)
+	)
+PaginationLoop:
+	for {
+		resp, err = hx.Do(req)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(resp.Body) == 0 {
+			return nil, ErrBodyEmpty
+		}
+
+		if err = json.Unmarshal(resp.Body, &parsed); err != nil {
+			return nil, err
+		}
+
+		for _, item := range parsed.Data {
+			item := item
+			all = append(all, item)
+			if stopFunc(item, all) {
+				break PaginationLoop
+			}
+		}
+
+		if parsed.Pagination == nil {
+			break
+		} else if parsed.Pagination.Cursor == "" {
+			break
+		}
+
+		if err = modReqQuery(req, "after", parsed.Pagination.Cursor); err != nil {
+			return nil, err
+		}
+		parsed = nil
+	}
+	return all, nil
+}
+
+func (hx *Helix) doAtMost(req *http.Request, attempts int) (*HttpResponse, error) {
 	if attempts <= 0 {
 		return nil, ErrTooManyRequestAttempts
 	}
@@ -114,8 +169,11 @@ func (hx *Helix) doAtMost(req *http.Request, attempts int) (*http.Response, erro
 		return nil, err
 	}
 	defer resp.Body.Close()
-	// Note: the body read is not limited since we trust the server responses. If
-	// this changes in the future this is a good place for a limited reader.
+	r := io.LimitReader(resp.Body, HttpMaxClientResponseReadLimitBytes)
+	body, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, ErrBodyResponseTooBig
+	}
 
 	respondedAt, err := parseRespDate(resp.Header.Get("Date"))
 	if err != nil {
@@ -152,7 +210,10 @@ func (hx *Helix) doAtMost(req *http.Request, attempts int) (*http.Response, erro
 	default:
 		return nil, ErrUnexpectedStatusCode
 	}
-	return resp, nil
+	return &HttpResponse{
+		Body:       body,
+		StatusCode: resp.StatusCode,
+	}, nil
 }
 
 func (hx *Helix) HandleStreamOnline(cb func(evt *EventStreamOnline)) {
@@ -226,15 +287,4 @@ func New(opts *HelixOpts) *Helix {
 	hx := NewWithoutExchange(opts)
 	hx.Exchange()
 	return hx
-}
-
-func (hx *Helix) WebhookHandler(webhookSecret []byte, fakeNow ...time.Time) func(c *fiber.Ctx) error {
-	h := &WebhookHandler{
-		hx:     hx,
-		secret: webhookSecret,
-	}
-	if len(fakeNow) == 1 {
-		h.fakeNow = fakeNow[0]
-	}
-	return h.handler
 }
