@@ -32,7 +32,7 @@ func TestBalancedMinDistribution(t *testing.T) {
 		totalLen := len(usernames)
 		idealDistribution := 100 / cycleSize
 		currentPercentage := l * 100 / totalLen
-		threshold := 20
+		threshold := 5
 
 		if currentPercentage > idealDistribution+threshold || currentPercentage < idealDistribution-threshold {
 			t.Logf("current percentage: %d, ideal distribution: %d", currentPercentage, idealDistribution)
@@ -45,9 +45,41 @@ func TestBalancedMinDistribution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if std > 20 {
+	if std > 5 {
+		t.Log(dim)
+		t.Log(bs.schedule)
 		t.Logf("std: %f", std)
 		t.Fatal("unbalanced distribution")
+	}
+}
+
+func TestBalancedLowEstimation(t *testing.T) {
+	t.Parallel()
+
+	cycleSize := 1200
+	estimation := len(usernames)
+
+	bs := newBalancedSchedule(BalancedScheduleOpts{
+		CycleSize:          cycleSize,
+		EstimatedStreamers: estimation,
+	})
+	for _, username := range usernames {
+		bs.Add(username)
+	}
+
+	if bs.opts.CycleSize != estimation {
+		t.Fatal("expected cycle size to be equal to estimated streamers when estimation is lower than cycle size")
+	}
+
+	dim := make([]int, 0, bs.opts.CycleSize)
+	for _, streamers := range bs.schedule {
+		l := len(streamers)
+		if l != 1 {
+			t.Log(dim)
+			t.Log(bs.schedule)
+			t.Fatal("expected a relation 1:1 (streamer:min) in the cycle")
+		}
+		dim = append(dim, l)
 	}
 }
 
@@ -82,7 +114,7 @@ Cycle:
 	if r[0].Min != 0 {
 		t.Fatal("expected scheduler to have picked minute 0")
 	}
-	if len(r[0].Streamers) != 66 {
-		t.Fatal("expected minute 0 to have 66 streamers")
+	if got := len(r[0].Streamers); got != 63 {
+		t.Fatalf("expected minute 0 to have 63 streamers, got %d", got)
 	}
 }
