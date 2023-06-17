@@ -14,11 +14,14 @@ var usernames = strings.Split(usernames_fixture, ",")
 func TestBalancedMinDistribution(t *testing.T) {
 	t.Parallel()
 
-	cycleSize := 10
+	var (
+		cycleSize  uint = 10
+		estimation uint = uint(len(usernames) + 10)
+	)
 
 	bs := newBalancedSchedule(BalancedScheduleOpts{
 		CycleSize:          cycleSize,
-		EstimatedStreamers: len(usernames) + 10,
+		EstimatedStreamers: estimation,
 	})
 	for _, username := range usernames {
 		bs.Add(username)
@@ -30,7 +33,7 @@ func TestBalancedMinDistribution(t *testing.T) {
 		dim = append(dim, len(streamers))
 
 		totalLen := len(usernames)
-		idealDistribution := 100 / cycleSize
+		idealDistribution := 100 / int(cycleSize)
 		currentPercentage := l * 100 / totalLen
 		threshold := 5
 
@@ -56,8 +59,10 @@ func TestBalancedMinDistribution(t *testing.T) {
 func TestBalancedLowEstimation(t *testing.T) {
 	t.Parallel()
 
-	cycleSize := 1200
-	estimation := len(usernames)
+	var (
+		cycleSize  uint = 1200
+		estimation uint = uint(len(usernames))
+	)
 
 	bs := newBalancedSchedule(BalancedScheduleOpts{
 		CycleSize:          cycleSize,
@@ -89,7 +94,7 @@ func TestBalancedScheduleRealTime1Pick(t *testing.T) {
 
 	bs := newBalancedSchedule(BalancedScheduleOpts{
 		CycleSize:          10,
-		EstimatedStreamers: len(usernames) + 10,
+		EstimatedStreamers: uint(len(usernames) + 10),
 		Freq:               pickInterval,
 	})
 	for _, username := range usernames {

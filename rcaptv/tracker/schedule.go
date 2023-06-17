@@ -16,7 +16,7 @@ type KeyBalancer interface {
 // we will have 200 assignations where each key is assigned to a single
 // container
 type CountBalance struct {
-	max, n int
+	max, n uint
 }
 
 func (b *CountBalance) Key(k string) Minute {
@@ -58,7 +58,7 @@ const ResetMinute = Minute(0)
 
 type BalancedScheduleOpts struct {
 	// After a full cycle, every streamer will have been chosen by Pick()
-	CycleSize int
+	CycleSize uint
 	// High estimation of the total number of streamers to be balanced.
 	//
 	// For the CountBalancer, If estimation is less than CycleSize, CycleSize
@@ -68,7 +68,7 @@ type BalancedScheduleOpts struct {
 	// determined CycleSize and as more streamers are added, the cycle will take
 	// longer to complete until the CycleSize is reached and the load is
 	// balanced.
-	EstimatedStreamers int
+	EstimatedStreamers uint
 
 	// Freq changes scheduler real-time pick interval. Useful for testing. Not
 	// recommended for real use cases since minutes is how rate limiting is
