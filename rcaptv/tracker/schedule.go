@@ -12,9 +12,10 @@ type KeyBalancer interface {
 }
 
 // CountBalance is a key balancer that simply counts the keys up to
-// a maximum value. The load and keys will be 1:1, that is for 200 keys
-// we will have 200 assignations where each key is assigned to a single
-// container
+// a maximum value. The load and keys will be 1:1 if the load = number 
+// of keys, that is, for 200 keys we will have 200 assignations where 
+// each key is assigned to a single container. If the load > number of
+// keys they will be distributed across the key pool in a first-in order.
 type CountBalance struct {
 	max, n uint
 }
@@ -42,7 +43,7 @@ func murmur(k string) uint32 {
 // the load distribution itself will be stochastic, the MurmurBalance provides
 // a deterministic key assignment: a streamer with the same username is
 // guaranteed to be assigned to the same key. In our use case this means that
-// each streamer requests will be performed always in the same minute as long
+// each streamer request will always be performed in the same minute as long
 // as the cycle size is the same. This could become handy in the future
 type MurmurBalance struct {
 	max uint32
