@@ -57,11 +57,6 @@ func (v *VOD) DurationSeconds() (int, error) {
 	return s, err
 }
 
-type ManyVOD struct {
-	Data       []VOD
-	Pagination *Pagination
-}
-
 func (hx *Helix) Vods(p *VODParams) ([]VOD, error) {
 	params := url.Values{}
 
