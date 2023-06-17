@@ -42,7 +42,7 @@ func murmur(k string) uint32 {
 // the load distribution itself will be stochastic, the MurmurBalance provides
 // a deterministic key assignment: a streamer with the same username is
 // guaranteed to be assigned to the same key. In our use case this means that
-// each streamer requests will be performed always in the same minute as long
+// each streamer request will always be performed in the same minute as long
 // as the cycle size is the same. This could become handy in the future
 type MurmurBalance struct {
 	max uint32
