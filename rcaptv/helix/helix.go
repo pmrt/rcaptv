@@ -67,17 +67,17 @@ func modReqQuery(req *http.Request, key, value string) error {
 }
 
 type HelixOpts struct {
-	creds ClientCreds
+	Creds ClientCreds
 
 	APIUrl           string
 	EventsubEndpoint string
 
 	// Event handlers
-	handleStreamOnline  func(evt *EventStreamOnline)
-	handleStreamOffline func(evt *EventStreamOffline)
+	HandleStreamOnline  func(evt *EventStreamOnline)
+	HandleStreamOffline func(evt *EventStreamOffline)
 
 	// Webhook handlers
-	handleRevocation func(evt *WebhookRevokePayload)
+	HandleRevocation func(evt *WebhookRevokePayload)
 }
 
 // Helix client for Twitch Helix API
@@ -96,7 +96,7 @@ type Helix struct {
 // IMPORTANT: Do not use hx.opts.creds.ClientID directly and do not ever mutate
 // it or the client would need mutexes for safe concurrent access.
 func (hx *Helix) ClientID() string {
-	return hx.opts.creds.ClientID
+	return hx.opts.Creds.ClientID
 }
 
 // ClientSecret returns the client secret which the helix client was
@@ -105,7 +105,7 @@ func (hx *Helix) ClientID() string {
 // IMPORTANT: Do not use hx.opts.creds.ClientSecret directly and do not ever
 // mutate it or the client would need mutexes for safe concurrent access.
 func (hx *Helix) ClientSecret() string {
-	return hx.opts.creds.ClientSecret
+	return hx.opts.Creds.ClientSecret
 }
 
 // APIUrl returns the twitch API url which the helix client was initializated
@@ -263,15 +263,15 @@ func (hx *Helix) doAtMost(req *http.Request, attempts int) (*HttpResponse, error
 }
 
 func (hx *Helix) HandleStreamOnline(cb func(evt *EventStreamOnline)) {
-	hx.opts.handleStreamOnline = cb
+	hx.opts.HandleStreamOnline = cb
 }
 
 func (hx *Helix) HandleStreamOffline(cb func(evt *EventStreamOffline)) {
-	hx.opts.handleStreamOffline = cb
+	hx.opts.HandleStreamOffline = cb
 }
 
 func (hx *Helix) HandleRevocation(cb func(evt *WebhookRevokePayload)) {
-	hx.opts.handleRevocation = cb
+	hx.opts.HandleRevocation = cb
 }
 
 func parseRespDate(date string) (time.Time, error) {
@@ -317,14 +317,14 @@ func NewWithoutExchange(opts *HelixOpts) *Helix {
 		c:    http.DefaultClient,
 		ctx:  context.Background(),
 	}
-	if hx.opts.handleStreamOnline == nil {
-		hx.opts.handleStreamOnline = func(evt *EventStreamOnline) {}
+	if hx.opts.HandleStreamOnline == nil {
+		hx.opts.HandleStreamOnline = func(evt *EventStreamOnline) {}
 	}
-	if hx.opts.handleStreamOffline == nil {
-		hx.opts.handleStreamOffline = func(evt *EventStreamOffline) {}
+	if hx.opts.HandleStreamOffline == nil {
+		hx.opts.HandleStreamOffline = func(evt *EventStreamOffline) {}
 	}
-	if hx.opts.handleRevocation == nil {
-		hx.opts.handleRevocation = func(evt *WebhookRevokePayload) {}
+	if hx.opts.HandleRevocation == nil {
+		hx.opts.HandleRevocation = func(evt *WebhookRevokePayload) {}
 	}
 	return hx
 }

@@ -164,7 +164,7 @@ func (h *WebhookHandler) handler(c *fiber.Ctx) error {
 		if err := c.BodyParser(&resp); err != nil {
 			return fiber.NewError(fiber.StatusBadRequest, "Invalid payload")
 		}
-		go h.hx.opts.handleRevocation(resp)
+		go h.hx.opts.HandleRevocation(resp)
 	default:
 		return fiber.NewError(fiber.StatusBadRequest, "Unknown Twitch-Eventsub-Message-Type header")
 	}
@@ -177,7 +177,7 @@ func (h *WebhookHandler) handleEvent(resp *WebhookNotificationPayload) error {
 	// goroutine
 	switch resp.Subscription.Type {
 	case SubStreamOnline:
-		go h.hx.opts.handleStreamOnline(&EventStreamOnline{
+		go h.hx.opts.HandleStreamOnline(&EventStreamOnline{
 			Event: &Event{
 				ID:        resp.Event.Event.ID,
 				Type:      resp.Event.Type,
@@ -190,7 +190,7 @@ func (h *WebhookHandler) handleEvent(resp *WebhookNotificationPayload) error {
 			},
 		})
 	case SubStreamOffline:
-		go h.hx.opts.handleStreamOffline(&EventStreamOffline{
+		go h.hx.opts.HandleStreamOffline(&EventStreamOffline{
 			Broadcaster: &Broadcaster{
 				ID:       resp.Event.Broadcaster.ID,
 				Login:    resp.Event.Broadcaster.Login,

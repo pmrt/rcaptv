@@ -73,7 +73,7 @@ func TestHelixClipDates(t *testing.T) {
 
 	hx := New(&HelixOpts{
 		APIUrl: "https://api.twitch.tv/helix",
-		creds: ClientCreds{
+		Creds: ClientCreds{
 			ClientID:     cid,
 			ClientSecret: cs,
 		},

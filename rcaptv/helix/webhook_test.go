@@ -107,7 +107,7 @@ func TestWebhookReplayAttackTimestamp(t *testing.T) {
 	copy(body4, body)
 
 	hx := NewWithoutExchange(&HelixOpts{
-		creds: ClientCreds{},
+		Creds: ClientCreds{},
 	})
 	app := fiber.New()
 	fakeNow, err := time.Parse(time.RFC3339, "2019-11-16T10:15:12.123Z")
@@ -191,7 +191,7 @@ func TestWebhookStreamOnline(t *testing.T) {
     }
   }`)
 	hx := NewWithoutExchange(&HelixOpts{
-		creds: ClientCreds{},
+		Creds: ClientCreds{},
 	})
 	wait := make(chan struct{}, 1)
 	hx.HandleStreamOnline(func(evt *EventStreamOnline) {
@@ -276,7 +276,7 @@ func TestWebhookStreamOffline(t *testing.T) {
     }
   }`)
 
-	hx := NewWithoutExchange(&HelixOpts{creds: ClientCreds{}})
+	hx := NewWithoutExchange(&HelixOpts{Creds: ClientCreds{}})
 	wait := make(chan struct{}, 1)
 	hx.HandleStreamOffline(func(evt *EventStreamOffline) {
 		onlineEvt = evt
@@ -340,7 +340,7 @@ func TestWebhookVerification(t *testing.T) {
     }
   }`)
 
-	hx := NewWithoutExchange(&HelixOpts{creds: ClientCreds{}})
+	hx := NewWithoutExchange(&HelixOpts{Creds: ClientCreds{}})
 	app := fiber.New()
 	fakeNow, err := time.Parse(time.RFC3339, "2019-11-16T10:15:12.123Z")
 	if err != nil {
@@ -396,7 +396,7 @@ func TestWebhookRevocation(t *testing.T) {
   }`)
 
 	var revokedEvt *WebhookRevokePayload
-	hx := NewWithoutExchange(&HelixOpts{creds: ClientCreds{}})
+	hx := NewWithoutExchange(&HelixOpts{Creds: ClientCreds{}})
 	wait := make(chan struct{}, 1)
 	hx.HandleRevocation(func(evt *WebhookRevokePayload) {
 		revokedEvt = evt

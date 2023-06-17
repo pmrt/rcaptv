@@ -20,7 +20,7 @@ func TestHelixCredentials(t *testing.T) {
 	}
 
 	hx := New(&HelixOpts{
-		creds: ClientCreds{
+		Creds: ClientCreds{
 			ClientID:     cid,
 			ClientSecret: cs,
 		},
