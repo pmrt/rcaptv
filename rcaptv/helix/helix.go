@@ -80,10 +80,50 @@ type HelixOpts struct {
 	handleRevocation func(evt *WebhookRevokePayload)
 }
 
+// Helix client for Twitch Helix API
+//
+// Helix is safe for concurrent access if opts are never mutated after
+// initialization
 type Helix struct {
 	ctx  context.Context
 	opts *HelixOpts
 	c    *http.Client
+}
+
+// ClientID returns the client id which the helix client was initializated
+// with.
+//
+// IMPORTANT: Do not use hx.opts.creds.ClientID directly and do not ever mutate
+// it or the client would need mutexes for safe concurrent access.
+func (hx *Helix) ClientID() string {
+	return hx.opts.creds.ClientID
+}
+
+// ClientSecret returns the client secret which the helix client was
+// initializated with.
+//
+// IMPORTANT: Do not use hx.opts.creds.ClientSecret directly and do not ever
+// mutate it or the client would need mutexes for safe concurrent access.
+func (hx *Helix) ClientSecret() string {
+	return hx.opts.creds.ClientSecret
+}
+
+// APIUrl returns the twitch API url which the helix client was initializated
+// with.
+//
+// IMPORTANT: Do not use hx.opts.APIUrl directly and do not ever mutate it or
+// the client would need mutexes for safe concurrent access.
+func (hx *Helix) APIUrl() string {
+	return hx.opts.APIUrl
+}
+
+// EventsubEndpoint returns the twitch eventsub endpoint which the helix client
+// was initialized with.
+//
+// IMPORTANT: Do not use hx.opts.EventsubEndpoint directly and do not ever
+// mutate it or the client would need mutexes for safe concurrent access.
+func (hx *Helix) EventsubEndpoint() string {
+	return hx.opts.EventsubEndpoint
 }
 
 // Do handles some errors for resiliency and retries if possible. If
@@ -163,8 +203,8 @@ func (hx *Helix) doAtMost(req *http.Request, attempts int) (*HttpResponse, error
 		return nil, ErrTooManyRequestAttempts
 	}
 
-	if hx.opts.creds.ClientSecret != "" {
-		req.Header.Set("Client-Id", hx.opts.creds.ClientID)
+	if hx.ClientSecret() != "" {
+		req.Header.Set("Client-Id", hx.ClientID())
 	}
 	resp, err := hx.c.Do(req)
 	if err != nil {
@@ -260,8 +300,8 @@ func untilRatelimitReset(reset string, respondedAt time.Time) (time.Duration, er
 // Must be used before using authenticated endpoints.
 func (hx *Helix) Exchange() {
 	o2 := &clientcredentials.Config{
-		ClientID:     hx.opts.creds.ClientID,
-		ClientSecret: hx.opts.creds.ClientSecret,
+		ClientID:     hx.ClientID(),
+		ClientSecret: hx.ClientSecret(),
 		TokenURL:     twitch.Endpoint.TokenURL,
 	}
 	hx.c = o2.Client(hx.ctx)

@@ -27,7 +27,7 @@ func (hx *Helix) CreateEventsubSubscription(sub *Subscription) error {
 	}
 	req, err := http.NewRequest(
 		"POST",
-		hx.opts.APIUrl+hx.opts.EventsubEndpoint+"/subscriptions",
+		hx.APIUrl()+hx.EventsubEndpoint()+"/subscriptions",
 		buf,
 	)
 	if err != nil {

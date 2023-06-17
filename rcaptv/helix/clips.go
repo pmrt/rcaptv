@@ -68,7 +68,7 @@ func (hx *Helix) Clips(p *ClipsParams) ([]Clip, error) {
 
 	req, err := http.NewRequest(
 		"GET",
-		fmt.Sprintf("%s/clips?%s", hx.opts.APIUrl, params.Encode()),
+		fmt.Sprintf("%s/clips?%s", hx.APIUrl(), params.Encode()),
 		nil,
 	)
 	if err != nil {

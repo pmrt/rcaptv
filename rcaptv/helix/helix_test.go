@@ -33,11 +33,11 @@ func TestHelixCredentials(t *testing.T) {
 	}
 
 	endpoint := fmt.Sprintf("/users?login=%s", "alexelcapo")
-	req, err := http.NewRequest("GET", hx.opts.APIUrl+endpoint, nil)
+	req, err := http.NewRequest("GET", hx.APIUrl()+endpoint, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	req.Header.Set("Client-Id", hx.opts.creds.ClientID)
+	req.Header.Set("Client-Id", hx.ClientID())
 
 	resp, err := hx.c.Do(req)
 	if err != nil {

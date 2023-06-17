@@ -83,7 +83,7 @@ func (hx *Helix) Vods(p *VODParams) ([]VOD, error) {
 
 	req, err := http.NewRequest(
 		"GET",
-		fmt.Sprintf("%s/videos?%s", hx.opts.APIUrl, params.Encode()),
+		fmt.Sprintf("%s/videos?%s", hx.APIUrl(), params.Encode()),
 		nil,
 	)
 	if err != nil {
