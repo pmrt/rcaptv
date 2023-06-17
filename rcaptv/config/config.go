@@ -145,8 +145,7 @@ func LoadVars() {
 
 	Debug = Env("DEBUG", false)
 	logger.SetLevel(Env("LOG_LEVEL", int8(zerolog.InfoLevel)))
-	if !IsProd {
-		Debug = Env("DEBUG", true)
+	if Debug {
 		logger.SetLevel(Env("LOG_LEVEL", int8(zerolog.DebugLevel)))
 	}
 }
