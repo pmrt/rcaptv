@@ -11,8 +11,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/rs/zerolog"
 	"golang.org/x/oauth2/clientcredentials"
 	"golang.org/x/oauth2/twitch"
+	"pedro.to/rcaptv/logger"
 )
 
 const (
@@ -199,6 +201,7 @@ PaginationLoop:
 }
 
 func (hx *Helix) doAtMost(req *http.Request, attempts int) (*HttpResponse, error) {
+	l := logger.New("", "helix")
 	if attempts <= 0 {
 		return nil, ErrTooManyRequestAttempts
 	}
@@ -206,6 +209,11 @@ func (hx *Helix) doAtMost(req *http.Request, attempts int) (*HttpResponse, error
 	if hx.ClientSecret() != "" {
 		req.Header.Set("Client-Id", hx.ClientID())
 	}
+
+	l.Debug().
+		Int("attempts_left", attempts).
+		Str("query", req.URL.RawQuery).
+		Msgf("%s: %s", req.Method, req.URL.Path)
 	resp, err := hx.c.Do(req)
 	if err != nil {
 		return nil, err
@@ -333,4 +341,13 @@ func New(opts *HelixOpts) *Helix {
 	hx := NewWithoutExchange(opts)
 	hx.Exchange()
 	return hx
+}
+
+func NewWithLogger(opts *HelixOpts, l zerolog.Logger) *Helix {
+	l.UpdateContext(func(c zerolog.Context) zerolog.Context {
+		return c.Str("context", "helix")
+	})
+
+	l.Info().Msg("=> initializing helix client (using credentials)")
+	return New(opts)
 }
