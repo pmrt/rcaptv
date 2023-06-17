@@ -12,9 +12,10 @@ type KeyBalancer interface {
 }
 
 // CountBalance is a key balancer that simply counts the keys up to
-// a maximum value. The load and keys will be 1:1, that is for 200 keys
-// we will have 200 assignations where each key is assigned to a single
-// container
+// a maximum value. The load and keys will be 1:1 if the load = number 
+// of keys, that is, for 200 keys we will have 200 assignations where 
+// each key is assigned to a single container. If the load > number of
+// keys they will be distributed across the key pool in a first-in order.
 type CountBalance struct {
 	max, n int
 }
