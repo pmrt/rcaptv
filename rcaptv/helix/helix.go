@@ -36,6 +36,8 @@ var (
 	ErrUnexpectedStatusCode   = errors.New("unexpected status code")
 	ErrBodyResponseTooBig     = errors.New("response body too big")
 	ErrBodyEmpty              = errors.New("response body empty")
+	ErrBadRequest             = errors.New("bad request")
+	ErrNotFound               = errors.New("not found")
 )
 
 type HttpResponse struct {
@@ -207,6 +209,10 @@ func (hx *Helix) doAtMost(req *http.Request, attempts int) (*HttpResponse, error
 		return hx.doAtMost(req, attempts)
 	case http.StatusUnauthorized:
 		return nil, ErrUnauthorized
+	case http.StatusBadRequest:
+		return nil, ErrBadRequest
+	case http.StatusNotFound:
+		return nil, ErrNotFound
 	default:
 		return nil, ErrUnexpectedStatusCode
 	}
