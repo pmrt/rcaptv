@@ -38,7 +38,11 @@ var (
 	APIPort          string
 	EventSubEndpoint string
 
-	TrackingCycleMinutes int
+	TrackingCycleMinutes     int
+	ClipTrackingWindowHours  int
+	ClipTrackingMaxDeepLevel int
+	ClipViewThreshold        int
+	ClipViewWindowSize       int
 
 	TrackIntervalMinutes int
 
@@ -142,6 +146,10 @@ func LoadVars() {
 	EventSubEndpoint = Env("EVENTSUB_ENDPOINT", "/eventsub")
 
 	TrackingCycleMinutes = Env("TRACKING_CYCLE_MINUTES", 720)
+	ClipTrackingWindowHours = Env("CLIP_TRACKING_WINDOW_HOURS", 7*24)
+	ClipTrackingMaxDeepLevel = Env("CLIP_TRACKING_MAX_DEEP_LEVEL", 2)
+	ClipViewThreshold = Env("CLIP_VIEW_THRESHOLD", 10)
+	ClipViewWindowSize = Env("CLIP_VIEW_WINDOW_SIZE", 4)
 
 	Debug = Env("DEBUG", false)
 	logger.SetLevel(Env("LOG_LEVEL", int8(zerolog.InfoLevel)))

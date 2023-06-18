@@ -319,11 +319,14 @@ func (hx *Helix) Exchange() {
 // credentials for a token source. Useful for testing.
 //
 // Use New() if your helix client will use authenticated endpoints.
-func NewWithoutExchange(opts *HelixOpts) *Helix {
+func NewWithoutExchange(opts *HelixOpts, c ...*http.Client) *Helix {
 	hx := &Helix{
 		opts: opts,
 		c:    http.DefaultClient,
 		ctx:  context.Background(),
+	}
+	if len(c) == 1 {
+		hx.c = c[0]
 	}
 	if hx.opts.HandleStreamOnline == nil {
 		hx.opts.HandleStreamOnline = func(evt *EventStreamOnline) {}

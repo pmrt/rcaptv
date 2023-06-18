@@ -26,7 +26,7 @@ func TestHelixClip(t *testing.T) {
 		},
 		c: sv.Client(),
 	}
-	clips, err := hx.Clips(&ClipsParams{
+	clipsResp, err := hx.Clips(&ClipsParams{
 		BroadcasterID:            "58753574",
 		StopViewsThreshold:       8,
 		ViewsThresholdWindowSize: 3,
@@ -55,7 +55,7 @@ func TestHelixClip(t *testing.T) {
 			ClipID: "LuckyBrainyNikudonSMOrc-G-DIj3MqxvrFQDMd",
 		},
 	}
-	for i, clip := range clips {
+	for i, clip := range clipsResp.Clips {
 		got, want := clip.ClipID, want[i].ClipID
 		if got != want {
 			t.Fatalf("unexpected clip id got: %s, want %s", got, want)
@@ -86,7 +86,7 @@ func TestHelixClipDates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	clips, err := hx.Clips(&ClipsParams{
+	clipsResp, err := hx.Clips(&ClipsParams{
 		BroadcasterID:            "58753574",
 		StopViewsThreshold:       (385 + 507 + 823) / 3,
 		ViewsThresholdWindowSize: 3,
@@ -112,7 +112,7 @@ func TestHelixClipDates(t *testing.T) {
 			ClipID: "LuckyBrainyNikudonSMOrc-G-DIj3MqxvrFQDMd",
 		},
 	}
-	for i, clip := range clips {
+	for i, clip := range clipsResp.Clips {
 		got, want := clip.ClipID, want[i].ClipID
 		if got != want {
 			t.Fatalf("unexpected clip id got: %s, want %s", got, want)

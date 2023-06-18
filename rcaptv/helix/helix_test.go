@@ -229,7 +229,7 @@ func TestHelixPagination(t *testing.T) {
 		},
 		c: sv.Client(),
 	}
-	clips, err := hx.Clips(&ClipsParams{
+	clipsResp, err := hx.Clips(&ClipsParams{
 		BroadcasterID:            "58753574",
 		StopViewsThreshold:       8,
 		ViewsThresholdWindowSize: 3,
@@ -264,7 +264,7 @@ func TestHelixPagination(t *testing.T) {
 			ClipID: "RacyResilientRhinocerosOSkomodo-nuZkGFtDmVWydT8i",
 		},
 	}
-	for i, clip := range clips {
+	for i, clip := range clipsResp.Clips {
 		got, want := clip.ClipID, want[i].ClipID
 		if got != want {
 			t.Fatalf("unexpected clip id got: %s, want %s", got, want)

@@ -3,7 +3,9 @@ package tracker
 import (
 	"context"
 	"database/sql"
+	"math"
 	"sync"
+	"time"
 
 	cfg "pedro.to/rcaptv/config"
 	"pedro.to/rcaptv/database"
@@ -16,6 +18,12 @@ type Tracker struct {
 	db  *sql.DB
 	ctx context.Context
 	hx  *helix.Helix
+
+	TrackingCycleMinutes     int
+	ClipTrackingMaxDeepLevel int
+	ClipTrackingWindowHours  int
+	ClipViewThreshold        int
+	ClipViewWindowSize       int
 }
 
 func (t *Tracker) Run() error {
@@ -34,7 +42,7 @@ func (t *Tracker) Run() error {
 	l.Info().
 		Msg("=> => initializing scheduler")
 	bs := newBalancedSchedule(BalancedScheduleOpts{
-		CycleSize:          uint(cfg.TrackingCycleMinutes),
+		CycleSize:          uint(t.TrackingCycleMinutes),
 		EstimatedStreamers: uint(len),
 	})
 	for _, streamer := range streamers {
@@ -67,8 +75,11 @@ func (t *Tracker) Run() error {
 				// the numbers to find out rate limits and the right cycle size
 				wg.Add(1)
 				go func() {
-					// get clips
-					// get vods
+					_, err := t.FetchClips(bid)
+					if err != nil {
+						l.Err(err).Msg("failed to fetch clips")
+					}
+					// get vods - TODO
 					wg.Done()
 				}()
 				wg.Wait()
@@ -81,19 +92,114 @@ func (t *Tracker) Run() error {
 	}
 }
 
+// FetchClips for a given broadcaster ID in a rolling window specified by
+// ClipTrackingWindowHours. Clips obtained will stop if they don't meet a view
+// threshold in a rolling window average. Both specified correspondingly by
+// ClipViewThreshold and ClipViewWindowSize
+//
+// Twitch API returns after consuming all the pages in pagination a maximum of
+// 1000 items for a given request. To avoid incomplete data FetchClips performs
+// a deep fetch, where it first performs a request for our predefined window.
+// If the response didn't reach the minimum threshold because the 1000 clips
+// have a large number of views, we consider the response incomplete and we
+// would divide the window in 2, performing another 2 requests, etc. up to a
+// maximum specified by ClipTrackingMaxDeepLevel.
+//
+// Maximum number of requests per streamer is `2^(maxlevel-1)+2(maxlevel-2) ...
+// 2^(maxlevel-m) ... 2^0` e.g.: if max_level=3;max_requests/streamer=7
+//
+// For example, if ClipTrackingWindowHours is set to 168 hours (7 days), and
+// the response is marked as incomplete, we would perform another 2 requests
+// for the ranges 0-84 and 84-168 hours in the corresponding rolling window
+func (t *Tracker) FetchClips(bid string) ([]helix.Clip, error) {
+	now := time.Now()
+	from := now.Add(-time.Duration(t.ClipTrackingWindowHours) * time.Hour)
+	return t.deepFetchClips(bid, 1, from, now)
+}
+
+func (t *Tracker) deepFetchClips(bid string, lvl int, from time.Time, to time.Time) ([]helix.Clip, error) {
+	clipsResp, err := t.hx.Clips(&helix.ClipsParams{
+		BroadcasterID:            bid,
+		StopViewsThreshold:       t.ClipViewThreshold,
+		ViewsThresholdWindowSize: t.ClipViewWindowSize,
+		StartedAt:                from,
+		EndedAt:                  to,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if clipsResp.IsComplete {
+		return clipsResp.Clips, nil
+	}
+	// If next level is too deep, we stop here and return the current results
+	if lvl+1 > t.ClipTrackingMaxDeepLevel {
+		l := logger.New("tracker", "fetch_clips")
+		l.Info().
+			Str("bid", bid).
+			Msgf("incomplete clip results after max deep level reached")
+		return clipsResp.Clips, nil
+	}
+
+	nReqs := math.Pow(2, float64(lvl))
+	partHours := float64(t.ClipTrackingWindowHours) / nReqs
+	all := make([]helix.Clip, 0, 100*2)
+	// left and right in the binary tree
+	for i := 0; i < 2; i++ {
+		to := from.Add(time.Duration(partHours) * time.Hour)
+		clips, err := t.deepFetchClips(
+			bid,
+			lvl+1,
+			from,
+			to,
+		)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, clips...)
+		from = to
+	}
+	return all, nil
+}
+
 type TrackerOpts struct {
 	Context context.Context
 	Storage database.Storage
 	Helix   *helix.Helix
+
+	TrackingCycleMinutes     int
+	ClipTrackingMaxDeepLevel int
+	ClipTrackingWindowHours  int
+	ClipViewThreshold        int
+	ClipViewWindowSize       int
 }
 
 func New(opts *TrackerOpts) *Tracker {
 	if opts.Context == nil {
 		opts.Context = context.Background()
 	}
+	if opts.TrackingCycleMinutes == 0 {
+		opts.TrackingCycleMinutes = cfg.TrackingCycleMinutes
+	}
+	if opts.ClipTrackingMaxDeepLevel == 0 {
+		opts.ClipTrackingMaxDeepLevel = cfg.ClipTrackingMaxDeepLevel
+	}
+	if opts.ClipTrackingWindowHours == 0 {
+		opts.ClipTrackingWindowHours = cfg.ClipTrackingWindowHours
+	}
+	if opts.ClipViewThreshold == 0 {
+		opts.ClipViewThreshold = cfg.ClipViewThreshold
+	}
+	if opts.ClipViewWindowSize == 0 {
+		opts.ClipViewWindowSize = cfg.ClipViewWindowSize
+	}
 	return &Tracker{
-		ctx: opts.Context,
-		db:  opts.Storage.Conn(),
-		hx:  opts.Helix,
+		ctx:                      opts.Context,
+		db:                       opts.Storage.Conn(),
+		hx:                       opts.Helix,
+		TrackingCycleMinutes:     opts.TrackingCycleMinutes,
+		ClipTrackingMaxDeepLevel: opts.ClipTrackingMaxDeepLevel,
+		ClipTrackingWindowHours:  opts.ClipTrackingWindowHours,
+		ClipViewThreshold:        opts.ClipViewThreshold,
+		ClipViewWindowSize:       opts.ClipViewWindowSize,
 	}
 }

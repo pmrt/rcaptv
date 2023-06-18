@@ -43,7 +43,16 @@ type Clip struct {
 	VODOffsetSeconds *int    `json:"vod_offset"`
 }
 
-func (hx *Helix) Clips(p *ClipsParams) ([]Clip, error) {
+type ClipResponse struct {
+	Clips []Clip
+	// Twitch only returns up to 1000 items. IsComplete is false if after
+	// requesting throughout the entire pagination, the view threshold was never
+	// triggered, which is indicative that there could be more clips that meet
+	// the view threshold
+	IsComplete bool
+}
+
+func (hx *Helix) Clips(p *ClipsParams) (*ClipResponse, error) {
 	params := url.Values{}
 
 	if p.BroadcasterID != "" {
@@ -84,8 +93,17 @@ func (hx *Helix) Clips(p *ClipsParams) ([]Clip, error) {
 
 	bop := bufop.New(p.ViewsThresholdWindowSize)
 	t := float32(p.StopViewsThreshold)
-	return DoWithPagination[Clip](hx, req, func(item Clip, all []Clip) bool {
+	stopped := false
+	clips, err := DoWithPagination[Clip](hx, req, func(item Clip, all []Clip) bool {
 		bop.PutInt(item.ViewCount)
-		return bop.Avg() < t
+		if bop.Avg() < t {
+			stopped = true
+			return true
+		}
+		return false
 	})
+	return &ClipResponse{
+		Clips:      clips,
+		IsComplete: stopped,
+	}, err
 }
