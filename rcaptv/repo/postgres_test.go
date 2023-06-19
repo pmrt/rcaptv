@@ -65,7 +65,7 @@ func TestMain(m *testing.M) {
 	db = sto.Conn()
 
 	_, err = db.Exec(`
-	INSERT INTO tracked_channels (bc_id, bc_display_name, bc_username, bc_type, pp_url, offline_pp_url, tracked_since, inactive_count, enabled_status, last_modified_status, priority_lvl)
+	INSERT INTO tracked_channels (bc_id, bc_display_name, bc_username, bc_type, pp_url, offline_pp_url, tracked_since, seen_inactive_count, enabled_status, last_modified_status, priority_lvl)
 	VALUES
 			('58753574', 'Zeling', 'zeling', 'partner', 'https://static-cdn.jtvnw.net/jtv_user_pictures/c4b97d39-4a23-4ab8-8d6c-f0fefe8b16f1-profile_image-300x300.png', 'https://static-cdn.jtvnw.net/jtv_user_pictures/1e0e6fd5-841b-4475-aaef-33dc05a5c738-channel_offline_image-1920x1080.jpeg', now(), 0, true, NULL, 0),
 			('90075649', 'IlloJuan', 'illojuan', 'partner', 'https://static-cdn.jtvnw.net/jtv_user_pictures/37454f0e-581b-42ba-b95b-416f3113fd37-profile_image-300x300.png', 'https://static-cdn.jtvnw.net/jtv_user_pictures/ce65dafb-f633-4f70-b3a7-7e2eb3006139-channel_offline_image-1920x1080.jpg', now(), 0, true, NULL, 0);
