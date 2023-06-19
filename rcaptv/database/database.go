@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"os"
 	"time"
 
+	"github.com/golang-migrate/migrate/v4"
 	"github.com/rs/zerolog"
 	l "github.com/rs/zerolog/log"
 	cfg "pedro.to/rcaptv/config"
@@ -73,10 +73,11 @@ func NewWithLogger(sto Storage, l zerolog.Logger) Storage {
 		Str("mig_path", opts.MigrationPath).
 		Msg("=> => attempting to apply migrations")
 	if err := sto.Migrate(); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
+		if errors.Is(err, migrate.ErrNoChange) {
+			l.Info().Msg("=> => => no changes were made")
+		} else {
 			l.Panic().Err(err).Msg("")
 		}
-		l.Info().Msg("=> => => no changes were made")
 	} else {
 		l.Info().Msg("=> => => migration success")
 	}
