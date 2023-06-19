@@ -75,7 +75,7 @@ func newTrackedChannelsTableImpl(schemaName, tableName, alias string) trackedCha
 		PpURLColumn              = postgres.StringColumn("pp_url")
 		OfflinePpURLColumn       = postgres.StringColumn("offline_pp_url")
 		TrackedSinceColumn       = postgres.TimestampColumn("tracked_since")
-		InactiveCountColumn      = postgres.IntegerColumn("inactive_count")
+		InactiveCountColumn      = postgres.IntegerColumn("seen_inactive_count")
 		EnabledStatusColumn      = postgres.BoolColumn("enabled_status")
 		LastModifiedStatusColumn = postgres.TimestampColumn("last_modified_status")
 		PriorityLvlColumn        = postgres.IntegerColumn("priority_lvl")
