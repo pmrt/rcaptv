@@ -133,7 +133,7 @@ func (t *Tracker) Run() error {
 //
 // If last VOD = "" FetchVods() will fetch only the most recent VOD and update
 // the table with it.
-func (t *Tracker) FetchVods(bid string) ([]helix.VOD, error) {
+func (t *Tracker) FetchVods(bid string) ([]*helix.VOD, error) {
 	lastvid := t.lastVIDByStreamer.LastVODId(bid)
 
 	opts := &helix.VODParams{

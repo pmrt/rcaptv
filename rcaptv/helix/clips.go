@@ -28,19 +28,19 @@ type ClipsParams struct {
 }
 
 type Clip struct {
-	ClipID           string  `json:"id"`
-	BroadCasterID    string  `json:"broadcaster_id"`
-	VideoID          string  `json:"video_id"`
-	CreatedAt        string  `json:"created_at"`
-	CreatorID        string  `json:"creator_id"`
-	CreatorName      string  `json:"creator_name"`
-	Title            string  `json:"title"`
-	GameID           string  `json:"game_id"`
-	Lang             string  `json:"language"`
-	ThumbnailURL     string  `json:"thumbnail_url"`
-	DurationSeconds  float32 `json:"duration"`
-	ViewCount        int     `json:"view_count"`
-	VODOffsetSeconds *int    `json:"vod_offset"`
+	ClipID           string  `json:"id" sql:"primary_key" alias:"clips.clip_id"`
+	BroadCasterID    string  `json:"broadcaster_id" alias:"clips.bc_id"`
+	VideoID          string  `json:"video_id" alias:"clips.video_id"`
+	CreatedAt        string  `json:"created_at" alias:"clips.created_at"`
+	CreatorID        string  `json:"creator_id" alias:"clips.creator_id"`
+	CreatorName      string  `json:"creator_name" alias:"clips.creator_name"`
+	Title            string  `json:"title" alias:"clips.title"`
+	GameID           string  `json:"game_id" alias:"clips.game_id"`
+	Lang             string  `json:"language" alias:"clips.lang"`
+	ThumbnailURL     string  `json:"thumbnail_url" alias:"clips.thumbnail_url"`
+	DurationSeconds  float32 `json:"duration" alias:"clips.duration_seconds"`
+	ViewCount        int     `json:"view_count" alias:"clips.view_count"`
+	VODOffsetSeconds *int    `json:"vod_offset" alias:"clips.vod_offset"`
 }
 
 type ClipResponse struct {
