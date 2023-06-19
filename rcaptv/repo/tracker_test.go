@@ -68,7 +68,7 @@ func TestUpsertClips(t *testing.T) {
 	clips := []*helix.Clip{
 		{
 			ClipID:           "clip1",
-			BroadCasterID:    "58753574",
+			BroadcasterID:    "58753574",
 			VideoID:          "video1",
 			CreatedAt:        "2023-01-01T10:00:00Z",
 			CreatorID:        "creator1",
@@ -83,7 +83,7 @@ func TestUpsertClips(t *testing.T) {
 		},
 		{
 			ClipID:           "clip2",
-			BroadCasterID:    "58753574",
+			BroadcasterID:    "58753574",
 			VideoID:          "",
 			CreatedAt:        "2023-02-15T15:30:00Z",
 			CreatorID:        "creator2",
@@ -116,7 +116,7 @@ func TestUpsertClips(t *testing.T) {
 	clips2 := []*helix.Clip{
 		{
 			ClipID:           "clip1",
-			BroadCasterID:    "58753574",
+			BroadcasterID:    "58753574",
 			VideoID:          "",
 			CreatedAt:        "2023-01-01T10:00:00Z",
 			CreatorID:        "creator1",
@@ -131,7 +131,7 @@ func TestUpsertClips(t *testing.T) {
 		},
 		{
 			ClipID:           "clip2",
-			BroadCasterID:    "58753574",
+			BroadcasterID:    "58753574",
 			VideoID:          "video2",
 			CreatedAt:        "2023-02-15T15:30:00Z",
 			CreatorID:        "creator2",

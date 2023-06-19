@@ -98,7 +98,7 @@ func UpsertClips(db *sql.DB, clips []*helix.Clip) error {
 	)
 	for _, c := range clips {
 		stmt.VALUES(
-			c.ClipID, c.BroadCasterID, c.VideoID, c.CreatedAt, c.CreatorID,
+			c.ClipID, c.BroadcasterID, c.VideoID, c.CreatedAt, c.CreatorID,
 			c.CreatorName, c.Title, c.GameID, c.Lang, c.ThumbnailURL,
 			c.DurationSeconds, c.ViewCount, c.VODOffsetSeconds,
 		)

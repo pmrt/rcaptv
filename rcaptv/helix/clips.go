@@ -29,7 +29,7 @@ type ClipsParams struct {
 
 type Clip struct {
 	ClipID           string  `json:"id" sql:"primary_key" alias:"clips.clip_id"`
-	BroadCasterID    string  `json:"broadcaster_id" alias:"clips.bc_id"`
+	BroadcasterID    string  `json:"broadcaster_id" alias:"clips.bc_id"`
 	VideoID          string  `json:"video_id" alias:"clips.video_id"`
 	CreatedAt        string  `json:"created_at" alias:"clips.created_at"`
 	CreatorID        string  `json:"creator_id" alias:"clips.creator_id"`
