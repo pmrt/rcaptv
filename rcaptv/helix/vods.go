@@ -34,28 +34,37 @@ type VODParams struct {
 }
 
 type VOD struct {
-	VideoID       string    `json:"id"`
-	BroadcasterID string    `json:"user_id"`
-	StreamID      string    `json:"stream_id"`
-	CreatedAt     time.Time `json:"created_at"`
-	PublishedAt   time.Time `json:"published_at"`
-	Duration      string    `json:"duration"`
-	Lang          string    `json:"language"`
-	Title         string    `json:"title"`
-	ThumbnailURL  string    `json:"thumbnail_url"`
-	ViewCount     int       `json:"view_count"`
+	VideoID        string    `json:"id" sql:"primary_key" alias:"vods.video_id"`
+	BroadcasterID  string    `json:"user_id" alias:"vods.bc_id"`
+	StreamID       string    `json:"stream_id" alias:"vods.stream_id"`
+	CreatedAt      time.Time `json:"created_at" alias:"vods.created_at"`
+	PublishedAt    time.Time `json:"published_at" alias:"vods.published_at"`
+	DurationString string    `json:"duration"`
+	Lang           string    `json:"language" alias:"vods.lang"`
+	Title          string    `json:"title" alias:"vods.title"`
+	ThumbnailURL   string    `json:"thumbnail_url" alias:"vods.thumbnail_url"`
+	ViewCount      int       `json:"view_count" alias:"vods.view_count"`
 
-	durationSeconds *int
+	Duration int32 `alias:"vods.duration_seconds"`
 }
 
-func (v *VOD) DurationSeconds() (int, error) {
-	if v.durationSeconds != nil {
-		return *v.durationSeconds, nil
+func (v *VOD) DurationSeconds() (int32, error) {
+	if v.Duration != 0 {
+		return v.Duration, nil
 	}
-	d, err := time.ParseDuration(v.Duration)
-	s := int(d.Seconds())
-	v.durationSeconds = &s
+	d, err := time.ParseDuration(v.DurationString)
+	s := int32(d.Seconds())
+	v.Duration = s
 	return s, err
+}
+
+func ParseVODDurations(vods []*VOD) error {
+	for _, vod := range vods {
+		if _, err := vod.DurationSeconds(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Vods return the last videos of type VOD for a given broadcaster if specified
@@ -65,7 +74,7 @@ func (v *VOD) DurationSeconds() (int, error) {
 //
 // If p.StopAtVODID is empty, it will fetch and return only the most recent
 // VOD.
-func (hx *Helix) Vods(p *VODParams) ([]VOD, error) {
+func (hx *Helix) Vods(p *VODParams) ([]*VOD, error) {
 	params := url.Values{}
 
 	if p.BroadcasterID != "" {
@@ -87,12 +96,12 @@ func (hx *Helix) Vods(p *VODParams) ([]VOD, error) {
 		p.First = 100
 	}
 
-	pagFunc := func(vod VOD, _ []VOD) bool {
+	pagFunc := func(vod *VOD, _ []*VOD) bool {
 		return p.StopAtVODID == vod.VideoID
 	}
 	if p.OnlyMostRecent {
 		p.First = 1
-		pagFunc = func(vod VOD, _ []VOD) bool {
+		pagFunc = func(vod *VOD, _ []*VOD) bool {
 			return true
 		}
 	}
@@ -106,5 +115,9 @@ func (hx *Helix) Vods(p *VODParams) ([]VOD, error) {
 	if err != nil {
 		return nil, err
 	}
-	return DoWithPagination[VOD](hx, req, pagFunc)
+	vods, err := DoWithPagination[*VOD](hx, req, pagFunc)
+	if err != nil {
+		return nil, err
+	}
+	return vods, ParseVODDurations(vods)
 }

@@ -12,7 +12,7 @@ import (
 func TestVODDurationSeconds(t *testing.T) {
 	tests := []struct {
 		duration string
-		want     int
+		want     int32
 	}{
 		{
 			duration: "1h20m5s",
@@ -30,7 +30,7 @@ func TestVODDurationSeconds(t *testing.T) {
 
 	for _, test := range tests {
 		vod := &VOD{
-			Duration: test.duration,
+			DurationString: test.duration,
 		}
 		got, err := vod.DurationSeconds()
 		if err != nil {
@@ -39,8 +39,8 @@ func TestVODDurationSeconds(t *testing.T) {
 		if got != test.want {
 			t.Fatalf("DurationSeconds() = %d, want %d", got, test.want)
 		}
-		if got != *vod.durationSeconds {
-			t.Fatalf("DurationSeconds() = %d, want %d", got, *vod.durationSeconds)
+		if got != vod.Duration {
+			t.Fatalf("DurationSeconds() = %d, want %d", got, vod.Duration)
 		}
 	}
 }
@@ -91,57 +91,61 @@ func TestHelixVOD(t *testing.T) {
 
 	want := []*VOD{
 		{
-			VideoID:       "1846472757",
-			BroadcasterID: "58753574",
-			StreamID:      "46935025356",
-			CreatedAt:     ts1,
-			PublishedAt:   ts1,
-			Duration:      "1h6m40s",
-			Lang:          "es",
-			Title:         "☣️DROPS☣️BELLUM I TIER 2 👺  RATILLA PELIRROJA VENGATIVA 💩 NOS hemos MUDADO DE BASE 😡  453643 HORAS  DE STREAM",
-			ThumbnailURL:  "https://static-cdn.jtvnw.net/cf_vods/dgeft87wbj63p/fa9c4ddfe074368f5a9a_zeling_46935025356_1686784894//thumb/thumb0-%{width}x%{height}.jpg",
-			ViewCount:     7865,
+			VideoID:        "1846472757",
+			BroadcasterID:  "58753574",
+			StreamID:       "46935025356",
+			CreatedAt:      ts1,
+			PublishedAt:    ts1,
+			DurationString: "1h6m40s",
+			Lang:           "es",
+			Title:          "☣️DROPS☣️BELLUM I TIER 2 👺  RATILLA PELIRROJA VENGATIVA 💩 NOS hemos MUDADO DE BASE 😡  453643 HORAS  DE STREAM",
+			ThumbnailURL:   "https://static-cdn.jtvnw.net/cf_vods/dgeft87wbj63p/fa9c4ddfe074368f5a9a_zeling_46935025356_1686784894//thumb/thumb0-%{width}x%{height}.jpg",
+			ViewCount:      7865,
+			Duration:       4000,
 		},
 		{
-			VideoID:       "1845909865",
-			BroadcasterID: "58753574",
-			StreamID:      "46932511084",
-			CreatedAt:     ts2,
-			PublishedAt:   ts2,
-			Duration:      "5h55m50s",
-			Lang:          "es",
-			Title:         "☣️DROPS☣️BELLUM I TIER 2 👺  RATILLA PELIRROJA VENGATIVA 💩 NOS hemos MUDADO DE BASE 😡",
-			ThumbnailURL:  "https://static-cdn.jtvnw.net/cf_vods/dgeft87wbj63p/0adfa532361f7a4e4bf1_zeling_46932511084_1686727279//thumb/thumb0-%{width}x%{height}.jpg",
-			ViewCount:     39695,
+			VideoID:        "1845909865",
+			BroadcasterID:  "58753574",
+			StreamID:       "46932511084",
+			CreatedAt:      ts2,
+			PublishedAt:    ts2,
+			DurationString: "5h55m50s",
+			Lang:           "es",
+			Title:          "☣️DROPS☣️BELLUM I TIER 2 👺  RATILLA PELIRROJA VENGATIVA 💩 NOS hemos MUDADO DE BASE 😡",
+			ThumbnailURL:   "https://static-cdn.jtvnw.net/cf_vods/dgeft87wbj63p/0adfa532361f7a4e4bf1_zeling_46932511084_1686727279//thumb/thumb0-%{width}x%{height}.jpg",
+			ViewCount:      39695,
+			Duration:       21350,
 		},
 		{
-			VideoID:       "1845060937",
-			BroadcasterID: "58753574",
-			StreamID:      "39674758421",
-			CreatedAt:     ts3,
-			PublishedAt:   ts3,
-			Duration:      "8h34m10s",
-			Lang:          "es",
-			Title:         "☣️DROPS☣️BELLUM I TIER 2  RATILLA PELIRROJA VENGATIVA 💩 NOS HAN RAIDEADO 😡 stream CORTO",
-			ThumbnailURL:  "https://static-cdn.jtvnw.net/cf_vods/dgeft87wbj63p/e50667e1d13ad2e09b4f_zeling_39674758421_1686640875//thumb/thumb0-%{width}x%{height}.jpg",
-			ViewCount:     53928,
+			VideoID:        "1845060937",
+			BroadcasterID:  "58753574",
+			StreamID:       "39674758421",
+			CreatedAt:      ts3,
+			PublishedAt:    ts3,
+			DurationString: "8h34m10s",
+			Lang:           "es",
+			Title:          "☣️DROPS☣️BELLUM I TIER 2  RATILLA PELIRROJA VENGATIVA 💩 NOS HAN RAIDEADO 😡 stream CORTO",
+			ThumbnailURL:   "https://static-cdn.jtvnw.net/cf_vods/dgeft87wbj63p/e50667e1d13ad2e09b4f_zeling_39674758421_1686640875//thumb/thumb0-%{width}x%{height}.jpg",
+			ViewCount:      53928,
+			Duration:       30850,
 		},
 		{
-			VideoID:       "1844500473",
-			BroadcasterID: "58753574",
-			StreamID:      "39673161157",
-			CreatedAt:     ts4,
-			PublishedAt:   ts4,
-			Duration:      "2h9m50s",
-			Lang:          "es",
-			Title:         "☣️DROPS☣️BELLUM I RATILLA PELIRROJA VENGATIVA 💩 NOS HAN RAIDEADO 😡",
-			ThumbnailURL:  "https://static-cdn.jtvnw.net/cf_vods/dgeft87wbj63p/2da3c11328ff9ec12e1d_zeling_39673161157_1686589516//thumb/thumb0-%{width}x%{height}.jpg",
-			ViewCount:     17792,
+			VideoID:        "1844500473",
+			BroadcasterID:  "58753574",
+			StreamID:       "39673161157",
+			CreatedAt:      ts4,
+			PublishedAt:    ts4,
+			DurationString: "2h9m50s",
+			Lang:           "es",
+			Title:          "☣️DROPS☣️BELLUM I RATILLA PELIRROJA VENGATIVA 💩 NOS HAN RAIDEADO 😡",
+			ThumbnailURL:   "https://static-cdn.jtvnw.net/cf_vods/dgeft87wbj63p/2da3c11328ff9ec12e1d_zeling_39673161157_1686589516//thumb/thumb0-%{width}x%{height}.jpg",
+			ViewCount:      17792,
+			Duration:       7790,
 		},
 	}
 
 	for i, vod := range vods {
-		if diff := deep.Equal(*want[i], vod); diff != nil {
+		if diff := deep.Equal(want[i], vod); diff != nil {
 			t.Fatal(diff)
 		}
 	}
