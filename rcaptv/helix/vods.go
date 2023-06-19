@@ -23,13 +23,14 @@ func (p VideoPeriod) String() string {
 }
 
 type VODParams struct {
-	BroadcasterID string
-	GameID        string
-	Lang          string
-	Period        VideoPeriod
-	After         string
-	First         int
-	StopAtVODID   string
+	BroadcasterID  string
+	GameID         string
+	Lang           string
+	Period         VideoPeriod
+	After          string
+	First          int
+	StopAtVODID    string
+	OnlyMostRecent bool
 }
 
 type VOD struct {
@@ -57,6 +58,13 @@ func (v *VOD) DurationSeconds() (int, error) {
 	return s, err
 }
 
+// Vods return the last videos of type VOD for a given broadcaster if specified
+// in the parameters in order of time (last or more recent VODs first).
+//
+// p.StopAtVODID is used to stop asking for more clips after a given VODID.
+//
+// If p.StopAtVODID is empty, it will fetch and return only the most recent
+// VOD.
 func (hx *Helix) Vods(p *VODParams) ([]VOD, error) {
 	params := url.Values{}
 
@@ -76,11 +84,20 @@ func (hx *Helix) Vods(p *VODParams) ([]VOD, error) {
 		params.Add("after", p.After)
 	}
 	if p.First == 0 {
-		p.First = 20
+		p.First = 100
+	}
+
+	pagFunc := func(vod VOD, _ []VOD) bool {
+		return p.StopAtVODID == vod.VideoID
+	}
+	if p.OnlyMostRecent {
+		p.First = 1
+		pagFunc = func(vod VOD, _ []VOD) bool {
+			return true
+		}
 	}
 	params.Add("first", strconv.Itoa(p.First))
 	params.Add("type", "archive")
-
 	req, err := http.NewRequest(
 		"GET",
 		fmt.Sprintf("%s/videos?%s", hx.APIUrl(), params.Encode()),
@@ -89,8 +106,5 @@ func (hx *Helix) Vods(p *VODParams) ([]VOD, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	return DoWithPagination[VOD](hx, req, func(vod VOD, _ []VOD) bool {
-		return p.StopAtVODID == vod.VideoID
-	})
+	return DoWithPagination[VOD](hx, req, pagFunc)
 }

@@ -1,53 +1,62 @@
 package repo
 
 import (
-	"log"
 	"testing"
 
-	"github.com/go-test/deep"
 	"pedro.to/rcaptv/gen/tracker/public/model"
-	. "pedro.to/rcaptv/gen/tracker/public/table"
-	"pedro.to/rcaptv/utils"
 )
 
-func insertTrackedChannel(ch *model.TrackedChannels) {
-	stmt := TrackedChannels.INSERT(
-		TrackedChannels.AllColumns,
-	).MODEL(ch)
-
-	_, err := stmt.Exec(db)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
 func TestTrackedChannels(t *testing.T) {
-	insertTrackedChannel(&model.TrackedChannels{
-		BcID:          "36138196",
-		BcDisplayName: "alexelcapo",
-		BcUsername:    "alexelcapo",
-		BcType:        model.Broadcastertype_Partner,
-		PpURL:         utils.StrPtr("https://static-cdn.jtvnw.net/jtv_user_pictures/bf455aac-4ce9-4daa-94a0-c6c0a1b2500d-channel_offline_image-1920x1080.png"),
-		OfflinePpURL:  utils.StrPtr("https://static-cdn.jtvnw.net/jtv_user_pictures/bf455aac-4ce9-4daa-94a0-c6c0a1b2500d-channel_offline_image-1920x1080.png"),
-	})
-
 	rows, err := Tracked(db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 1 {
-		t.Fatal("expected tracked channels to return exactly 1 row")
+	if len(rows) != 2 {
+		t.Fatal("expected tracked channels to return exactly 2 rows")
 	}
 
-	want := &model.TrackedChannels{
-		BcID:          "36138196",
-		BcDisplayName: "alexelcapo",
-		BcUsername:    "alexelcapo",
-		BcType:        model.Broadcastertype_Partner,
-		PpURL:         utils.StrPtr("https://static-cdn.jtvnw.net/jtv_user_pictures/bf455aac-4ce9-4daa-94a0-c6c0a1b2500d-channel_offline_image-1920x1080.png"),
-		OfflinePpURL:  utils.StrPtr("https://static-cdn.jtvnw.net/jtv_user_pictures/bf455aac-4ce9-4daa-94a0-c6c0a1b2500d-channel_offline_image-1920x1080.png"),
+	want := []*model.TrackedChannels{
+		{
+			BcID: "58753574",
+		},
+		{
+			BcID: "90075649",
+		},
 	}
-	if diff := deep.Equal(rows[0], want); diff != nil {
-		t.Fatal(diff)
+	for i, row := range rows {
+		got := row.BcID
+		want := want[i].BcID
+		if got != want {
+			t.Fatalf("unexpected tracked channel id, got %s, want %s", got, want)
+		}
+	}
+}
+
+func TestLastVODByStreamer(t *testing.T) {
+	rows, err := LastVODByStreamer(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantRows := []struct {
+		bid string
+		vid string
+	}{
+		{bid: "58753574", vid: "1849520474"},
+		{bid: "90075649", vid: "1847800606"},
+	}
+
+	for i, row := range rows {
+		got := row.BroadcasterID
+		want := wantRows[i].bid
+		if got != want {
+			t.Fatalf("unexpected bid, got %s, want %s", got, want)
+		}
+
+		got = row.VodID
+		want = wantRows[i].vid
+		if got != want {
+			t.Fatalf("unexpected vid, got %s, want %s", got, want)
+		}
 	}
 }

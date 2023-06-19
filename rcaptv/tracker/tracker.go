@@ -3,8 +3,8 @@ package tracker
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"math"
-	"sync"
 	"time"
 
 	cfg "pedro.to/rcaptv/config"
@@ -14,10 +14,40 @@ import (
 	"pedro.to/rcaptv/repo"
 )
 
+var (
+	ErrEmptyVODs = errors.New("got empty VODs for given streamer")
+)
+
+type lastVODTable map[string]string
+
+func (t lastVODTable) LastVODId(bid string) string {
+	return t[bid]
+}
+
+func (t lastVODTable) Set(bid, vid string) {
+	t[bid] = vid
+}
+
+func NewLastVODTable(estStreamers int) lastVODTable {
+	return make(lastVODTable, estStreamers)
+}
+
+func (t lastVODTable) FromDB(db *sql.DB) error {
+	rows, err := repo.LastVODByStreamer(db)
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		t.Set(row.BroadcasterID, row.VodID)
+	}
+	return nil
+}
+
 type Tracker struct {
-	db  *sql.DB
-	ctx context.Context
-	hx  *helix.Helix
+	db                *sql.DB
+	ctx               context.Context
+	hx                *helix.Helix
+	lastVIDByStreamer lastVODTable
 
 	TrackingCycleMinutes     int
 	ClipTrackingMaxDeepLevel int
@@ -28,10 +58,9 @@ type Tracker struct {
 
 func (t *Tracker) Run() error {
 	l := logger.New("tracker", "tracker")
-
 	l.Info().Msg("=> starting tracker service")
-	l.Info().
-		Msg("=> => fetching streamer list from database")
+
+	l.Info().Msg("=> => fetching streamer list from database")
 	streamers, err := repo.Tracked(t.db)
 	if err != nil {
 		return err
@@ -39,8 +68,11 @@ func (t *Tracker) Run() error {
 	len := len(streamers)
 	l.Info().Msgf("=> => => %d streamers loaded", len)
 
-	l.Info().
-		Msg("=> => initializing scheduler")
+	l.Info().Msg("=> => loading last VOD table")
+	t.lastVIDByStreamer = NewLastVODTable(len)
+	t.lastVIDByStreamer.FromDB(t.db)
+
+	l.Info().Msg("=> => initializing scheduler")
 	bs := newBalancedSchedule(BalancedScheduleOpts{
 		CycleSize:          uint(t.TrackingCycleMinutes),
 		EstimatedStreamers: uint(len),
@@ -59,7 +91,6 @@ func (t *Tracker) Run() error {
 		// For every scheduler tick we get the minute (or unit we're using) and the
 		// list of streamers to be invoked within that minute
 		case m := <-bs.RealTime():
-			var wg sync.WaitGroup
 			for _, bid := range m.Streamers {
 				bid := bid
 				l.Debug().
@@ -73,16 +104,19 @@ func (t *Tracker) Run() error {
 				// limit and if rate-limiting is limiting by seconds too, we may want
 				// to change the unit of minutes to seconds to make it easier to crunch
 				// the numbers to find out rate limits and the right cycle size
-				wg.Add(1)
-				go func() {
-					_, err := t.FetchClips(bid)
-					if err != nil {
-						l.Err(err).Msg("failed to fetch clips")
+				_, err := t.FetchClips(bid)
+				if err != nil {
+					l.Err(err).Msg("failed to fetch clips")
+				}
+				_, err = t.FetchVods(bid)
+				if err != nil {
+					if errors.Is(err, ErrEmptyVODs) {
+						// TODO - update tracked_channels.seen_inactive_count
+						l.Warn().Msgf("got no vods for streamer %s", bid)
+					} else {
+						l.Err(err).Msg("failed to fetch vods")
 					}
-					// get vods - TODO
-					wg.Done()
-				}()
-				wg.Wait()
+				}
 			}
 		case <-t.ctx.Done():
 			l.Info().Msg("stopping scheduler real-time tracking")
@@ -90,6 +124,37 @@ func (t *Tracker) Run() error {
 			return t.ctx.Err()
 		}
 	}
+}
+
+// FetchVods retrieves VODS for a given broadcaster ID up to the last vod ID,
+// including the last VOD ID in the result. Then it updates the lastVODs table
+// with the new most recent VOD. The last VOD ID is included and fetched again
+// just in case it was updated since the last time (e.g.: the duration)
+//
+// If last VOD = "" FetchVods() will fetch only the most recent VOD and update
+// the table with it.
+func (t *Tracker) FetchVods(bid string) ([]helix.VOD, error) {
+	lastvid := t.lastVIDByStreamer.LastVODId(bid)
+
+	opts := &helix.VODParams{
+		BroadcasterID: bid,
+		Period:        helix.Week,
+		StopAtVODID:   lastvid,
+	}
+	if lastvid == "" {
+		opts.OnlyMostRecent = true
+	}
+
+	vods, err := t.hx.Vods(opts)
+	if err != nil {
+		return nil, err
+	}
+	if len(vods) == 0 {
+		return nil, ErrEmptyVODs
+	}
+
+	t.lastVIDByStreamer.Set(bid, vods[0].VideoID)
+	return vods, nil
 }
 
 // FetchClips for a given broadcaster ID in a rolling window specified by
