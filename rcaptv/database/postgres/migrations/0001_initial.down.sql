@@ -7,6 +7,6 @@ DROP TABLE IF EXISTS vods;
 DROP TABLE IF EXISTS tracked_channels;
 
 DROP TYPE IF EXISTS langISO31661;
-DROP TYPE IF EXISTS stream_type;
+DROP TYPE IF EXISTS broadcasterType;
 
 COMMIT;
