@@ -19,6 +19,7 @@ type TrackedChannels struct {
 	PpURL              *string
 	OfflinePpURL       *string
 	TrackedSince       *time.Time
+	InactiveCount      *int32
 	EnabledStatus      *bool
 	LastModifiedStatus *time.Time
 	PriorityLvl        *int16

@@ -24,6 +24,7 @@ type trackedChannelsTable struct {
 	PpURL              postgres.ColumnString
 	OfflinePpURL       postgres.ColumnString
 	TrackedSince       postgres.ColumnTimestamp
+	InactiveCount      postgres.ColumnInteger
 	EnabledStatus      postgres.ColumnBool
 	LastModifiedStatus postgres.ColumnTimestamp
 	PriorityLvl        postgres.ColumnInteger
@@ -74,11 +75,12 @@ func newTrackedChannelsTableImpl(schemaName, tableName, alias string) trackedCha
 		PpURLColumn              = postgres.StringColumn("pp_url")
 		OfflinePpURLColumn       = postgres.StringColumn("offline_pp_url")
 		TrackedSinceColumn       = postgres.TimestampColumn("tracked_since")
+		InactiveCountColumn      = postgres.IntegerColumn("inactive_count")
 		EnabledStatusColumn      = postgres.BoolColumn("enabled_status")
 		LastModifiedStatusColumn = postgres.TimestampColumn("last_modified_status")
 		PriorityLvlColumn        = postgres.IntegerColumn("priority_lvl")
-		allColumns               = postgres.ColumnList{BcIDColumn, BcDisplayNameColumn, BcUsernameColumn, BcTypeColumn, PpURLColumn, OfflinePpURLColumn, TrackedSinceColumn, EnabledStatusColumn, LastModifiedStatusColumn, PriorityLvlColumn}
-		mutableColumns           = postgres.ColumnList{BcDisplayNameColumn, BcUsernameColumn, BcTypeColumn, PpURLColumn, OfflinePpURLColumn, TrackedSinceColumn, EnabledStatusColumn, LastModifiedStatusColumn, PriorityLvlColumn}
+		allColumns               = postgres.ColumnList{BcIDColumn, BcDisplayNameColumn, BcUsernameColumn, BcTypeColumn, PpURLColumn, OfflinePpURLColumn, TrackedSinceColumn, InactiveCountColumn, EnabledStatusColumn, LastModifiedStatusColumn, PriorityLvlColumn}
+		mutableColumns           = postgres.ColumnList{BcDisplayNameColumn, BcUsernameColumn, BcTypeColumn, PpURLColumn, OfflinePpURLColumn, TrackedSinceColumn, InactiveCountColumn, EnabledStatusColumn, LastModifiedStatusColumn, PriorityLvlColumn}
 	)
 
 	return trackedChannelsTable{
@@ -92,6 +94,7 @@ func newTrackedChannelsTableImpl(schemaName, tableName, alias string) trackedCha
 		PpURL:              PpURLColumn,
 		OfflinePpURL:       OfflinePpURLColumn,
 		TrackedSince:       TrackedSinceColumn,
+		InactiveCount:      InactiveCountColumn,
 		EnabledStatus:      EnabledStatusColumn,
 		LastModifiedStatus: LastModifiedStatusColumn,
 		PriorityLvl:        PriorityLvlColumn,
