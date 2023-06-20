@@ -15,6 +15,8 @@ import (
 	"pedro.to/rcaptv/tracker"
 )
 
+const version = "0.1.1"
+
 func waitSig() os.Signal {
 	sigint := make(chan os.Signal, 1)
 	signal.Notify(
@@ -29,7 +31,7 @@ func waitSig() os.Signal {
 
 func main() {
 	l := logger.New("tracker", "main")
-	l.Info().Msg("Tracker starting")
+	l.Info().Msgf("Tracker starting (v%s)", version)
 	if !cfg.IsProd {
 		l.Warn().Msg("[!] Running tracker in dev mode")
 	}
