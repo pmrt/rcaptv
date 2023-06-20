@@ -1,0 +1,46 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go Deployment
+
+on:
+  push:
+    branches: [ "main" ]
+    
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.20
+
+    - name: Build
+      env:
+        GOOS: linux
+        GOARCH: amd64
+        CGO_ENABLED: 0
+      run: go build -tags RELEASE -o /dist/rp_tracker ./cmd/tracker
+
+    - name: Test
+      env:
+        TEST_CLIENT_ID: ${{ secrets.test_client_id }}
+        TEST_CLIENT_SECRET: ${{ secrets.test_client_secret }}
+        API_URL: https://api.twitch.tv/helix
+        EVENTSUB_ENDPOINT: /eventsub
+      run: go test -timeout 30s -v ./...
+      
+    - name: Deploy
+      uses: contention/rsync-deployments@v2.0.0
+      with:
+        FLAGS: -avzr --delete
+        EXCLUDES: --exclude .env --exclude /.volumes/ --exclude /.git/
+        USER: root
+        HOST: ${{ secrets.server_host }}
+        LOCALPATH: /dist/
+        REMOTEPATH: /staging/
+        DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
