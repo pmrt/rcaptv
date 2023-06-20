@@ -160,7 +160,7 @@ func TestFetchVods(t *testing.T) {
 
 	// test again with a older lastVOD in the table
 	wantQuery = "first=100&period=week&type=archive&user_id=58753574"
-	tracker.lastVIDByStreamer.Set(bid, "1845060937")
+	tracker.lastVIDByStreamer[bid] = "1845060937"
 	vods, err := tracker.FetchVods(bid)
 	if err != nil {
 		t.Fatal(err)

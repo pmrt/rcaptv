@@ -20,27 +20,19 @@ var (
 
 type lastVODTable map[string]string
 
-func (t lastVODTable) LastVODId(bid string) string {
-	return t[bid]
-}
-
-func (t lastVODTable) Set(bid, vid string) {
-	t[bid] = vid
-}
-
-func NewLastVODTable(estStreamers int) lastVODTable {
-	return make(lastVODTable, estStreamers)
-}
-
 func (t lastVODTable) FromDB(db *sql.DB) error {
 	rows, err := repo.LastVODByStreamer(db)
 	if err != nil {
 		return err
 	}
 	for _, row := range rows {
-		t.Set(row.BroadcasterID, row.VodID)
+		t[row.BroadcasterID] = row.VodID
 	}
 	return nil
+}
+
+func NewLastVODTable(estStreamers int) lastVODTable {
+	return make(lastVODTable, estStreamers)
 }
 
 type Tracker struct {
@@ -65,17 +57,17 @@ func (t *Tracker) Run() error {
 	if err != nil {
 		return err
 	}
-	len := len(streamers)
-	l.Info().Msgf("=> => => %d streamers loaded", len)
+	lenbc := len(streamers)
+	l.Info().Msgf("=> => => %d streamers loaded", lenbc)
 
 	l.Info().Msg("=> => loading last VOD table")
-	t.lastVIDByStreamer = NewLastVODTable(len)
+	t.lastVIDByStreamer = NewLastVODTable(lenbc)
 	t.lastVIDByStreamer.FromDB(t.db)
 
 	l.Info().Msg("=> => initializing scheduler")
 	bs := newBalancedSchedule(BalancedScheduleOpts{
 		CycleSize:          uint(t.TrackingCycleMinutes),
-		EstimatedStreamers: uint(len),
+		EstimatedStreamers: uint(lenbc),
 	})
 	for _, streamer := range streamers {
 		bs.Add(streamer.BcID)
@@ -104,17 +96,28 @@ func (t *Tracker) Run() error {
 				// limit and if rate-limiting is limiting by seconds too, we may want
 				// to change the unit of minutes to seconds to make it easier to crunch
 				// the numbers to find out rate limits and the right cycle size
-				_, err := t.FetchClips(bid)
+				clips, err := t.FetchClips(bid)
 				if err != nil {
 					l.Err(err).Msg("failed to fetch clips")
 				}
-				_, err = t.FetchVods(bid)
+				vods, err := t.FetchVods(bid)
 				if err != nil {
 					if errors.Is(err, ErrEmptyVODs) {
 						// TODO - update tracked_channels.seen_inactive_count
 						l.Warn().Msgf("got no vods for streamer %s", bid)
 					} else {
 						l.Err(err).Msg("failed to fetch vods")
+					}
+				}
+
+				if len(clips) > 0 {
+					if err := repo.UpsertClips(t.db, clips); err != nil {
+						l.Err(err).Msg("failed to upsert clips")
+					}
+				}
+				if len(vods) > 0 {
+					if err := repo.UpsertVods(t.db, vods); err != nil {
+						l.Err(err).Msg("failed to upsert vods")
 					}
 				}
 			}
@@ -134,7 +137,7 @@ func (t *Tracker) Run() error {
 // If last VOD = "" FetchVods() will fetch only the most recent VOD and update
 // the table with it.
 func (t *Tracker) FetchVods(bid string) ([]*helix.VOD, error) {
-	lastvid := t.lastVIDByStreamer.LastVODId(bid)
+	lastvid := t.lastVIDByStreamer[bid]
 
 	opts := &helix.VODParams{
 		BroadcasterID: bid,
@@ -152,8 +155,7 @@ func (t *Tracker) FetchVods(bid string) ([]*helix.VOD, error) {
 	if len(vods) == 0 {
 		return nil, ErrEmptyVODs
 	}
-
-	t.lastVIDByStreamer.Set(bid, vods[0].VideoID)
+	t.lastVIDByStreamer[bid] = vods[0].VideoID
 	return vods, nil
 }
 
@@ -176,13 +178,13 @@ func (t *Tracker) FetchVods(bid string) ([]*helix.VOD, error) {
 // For example, if ClipTrackingWindowHours is set to 168 hours (7 days), and
 // the response is marked as incomplete, we would perform another 2 requests
 // for the ranges 0-84 and 84-168 hours in the corresponding rolling window
-func (t *Tracker) FetchClips(bid string) ([]helix.Clip, error) {
+func (t *Tracker) FetchClips(bid string) ([]*helix.Clip, error) {
 	now := time.Now()
 	from := now.Add(-time.Duration(t.ClipTrackingWindowHours) * time.Hour)
 	return t.deepFetchClips(bid, 1, from, now)
 }
 
-func (t *Tracker) deepFetchClips(bid string, lvl int, from time.Time, to time.Time) ([]helix.Clip, error) {
+func (t *Tracker) deepFetchClips(bid string, lvl int, from time.Time, to time.Time) ([]*helix.Clip, error) {
 	clipsResp, err := t.hx.Clips(&helix.ClipsParams{
 		BroadcasterID:            bid,
 		StopViewsThreshold:       t.ClipViewThreshold,
@@ -207,7 +209,7 @@ func (t *Tracker) deepFetchClips(bid string, lvl int, from time.Time, to time.Ti
 
 	nReqs := math.Pow(2, float64(lvl))
 	partHours := float64(t.ClipTrackingWindowHours) / nReqs
-	all := make([]helix.Clip, 0, 100*2)
+	all := make([]*helix.Clip, 0, 100*2)
 	// left and right in the binary tree
 	for i := 0; i < 2; i++ {
 		to := from.Add(time.Duration(partHours) * time.Hour)

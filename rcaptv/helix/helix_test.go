@@ -238,7 +238,7 @@ func TestHelixPagination(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := []Clip{
+	want := []*Clip{
 		{
 			ClipID: "CoweringDreamyOrcaGingerPower-x9zdfeI9Z8X7sVQh",
 		},

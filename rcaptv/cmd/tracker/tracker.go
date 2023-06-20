@@ -19,6 +19,7 @@ func waitSig() os.Signal {
 	sigint := make(chan os.Signal, 1)
 	signal.Notify(
 		sigint,
+		os.Interrupt,
 		syscall.SIGINT,
 		syscall.SIGTERM,
 		syscall.SIGQUIT,
@@ -67,11 +68,13 @@ func main() {
 	}, l)
 
 	go func() {
-		tracker.New(&tracker.TrackerOpts{
+		if err := tracker.New(&tracker.TrackerOpts{
 			Helix:   hx,
 			Context: ctx,
 			Storage: sto,
-		}).Run()
+		}).Run(); err != nil {
+			l.Panic().Err(err).Msg("tracker returned an error")
+		}
 	}()
 	sig := waitSig()
 	l.Warn().Msgf("Termination signal received [%s]. Attempting gracefully shutdown...", sig)

@@ -44,7 +44,7 @@ type Clip struct {
 }
 
 type ClipResponse struct {
-	Clips []Clip
+	Clips []*Clip
 	// Twitch only returns up to 1000 items. IsComplete is false if after
 	// requesting throughout the entire pagination, the view threshold was never
 	// triggered, which is indicative that there could be more clips that meet
@@ -94,7 +94,7 @@ func (hx *Helix) Clips(p *ClipsParams) (*ClipResponse, error) {
 	bop := bufop.New(p.ViewsThresholdWindowSize)
 	t := float32(p.StopViewsThreshold)
 	stopped := false
-	clips, err := DoWithPagination[Clip](hx, req, func(item Clip, all []Clip) bool {
+	clips, err := DoWithPagination[*Clip](hx, req, func(item *Clip, all []*Clip) bool {
 		bop.PutInt(item.ViewCount)
 		if bop.Avg() < t {
 			stopped = true
