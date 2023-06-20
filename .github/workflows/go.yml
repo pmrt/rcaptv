@@ -25,7 +25,7 @@ jobs:
         GOOS: linux
         GOARCH: amd64
         CGO_ENABLED: 0
-      run: go build -tags RELEASE -o /dist/rp_tracker ./cmd/tracker
+      run: sudo go build -tags RELEASE -o /dist/rp_tracker ./cmd/tracker
 
     - name: Test
       env:
