@@ -5,7 +5,8 @@ name: Go Deployment
 
 on:
   push:
-    branches: [ "main" ]
+    tags:
+      - '*'
     
 jobs:
 
