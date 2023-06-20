@@ -25,9 +25,10 @@ jobs:
         GOOS: linux
         GOARCH: amd64
         CGO_ENABLED: 0
-      run: sudo go build -tags RELEASE -o /dist/rp_tracker ./cmd/tracker
+      run: sudo go build -tags RELEASE -o ./dist/rp_tracker ./cmd/tracker
 
     - name: Test
+      working-directory: ./rcaptv
       env:
         TEST_CLIENT_ID: ${{ secrets.test_client_id }}
         TEST_CLIENT_SECRET: ${{ secrets.test_client_secret }}
@@ -42,6 +43,6 @@ jobs:
         EXCLUDES: --exclude .env --exclude /.volumes/ --exclude /.git/
         USER: root
         HOST: ${{ secrets.server_host }}
-        LOCALPATH: /dist/
+        LOCALPATH: /rcaptv/dist
         REMOTEPATH: /staging/
         DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
