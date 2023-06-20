@@ -43,6 +43,6 @@ jobs:
         EXCLUDES: --exclude .env --exclude /.volumes/ --exclude /.git/
         USER: root
         HOST: ${{ secrets.server_host }}
-        LOCALPATH: /rcaptv/dist
+        LOCALPATH: /rcaptv/dist/
         REMOTEPATH: /staging/
         DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
