@@ -46,6 +46,11 @@ type Tracker struct {
 	ClipTrackingWindowHours  int
 	ClipViewThreshold        int
 	ClipViewWindowSize       int
+
+	// Useful for testing. Run won't FetchVods/Clips if true. Not available in
+	// production mode
+	FakeRun bool
+	stopped bool
 }
 
 func (t *Tracker) Run() error {
@@ -89,6 +94,11 @@ func (t *Tracker) Run() error {
 					Str("bid", bid).
 					Msg("fetching streamer clips and vods")
 
+				if !cfg.IsProd && t.FakeRun {
+					l.Warn().Msg("skipping fetches in fake run mode")
+					continue
+				}
+
 				// Execute sequantially streamer requests. Streamer by streamer. We are
 				// in no hurry and we don't want to be rate-limited.
 				//
@@ -123,6 +133,7 @@ func (t *Tracker) Run() error {
 			}
 		case <-t.ctx.Done():
 			l.Info().Msg("stopping scheduler real-time tracking")
+			t.stopped = true
 			bs.Cancel()
 			return t.ctx.Err()
 		}
@@ -259,9 +270,9 @@ func New(opts *TrackerOpts) *Tracker {
 	if opts.ClipViewWindowSize == 0 {
 		opts.ClipViewWindowSize = cfg.ClipViewWindowSize
 	}
-	return &Tracker{
+
+	tk := &Tracker{
 		ctx:                      opts.Context,
-		db:                       opts.Storage.Conn(),
 		hx:                       opts.Helix,
 		TrackingCycleMinutes:     opts.TrackingCycleMinutes,
 		ClipTrackingMaxDeepLevel: opts.ClipTrackingMaxDeepLevel,
@@ -269,4 +280,8 @@ func New(opts *TrackerOpts) *Tracker {
 		ClipViewThreshold:        opts.ClipViewThreshold,
 		ClipViewWindowSize:       opts.ClipViewWindowSize,
 	}
+	if opts.Storage != nil {
+		tk.db = opts.Storage.Conn()
+	}
+	return tk
 }

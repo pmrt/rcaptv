@@ -163,16 +163,21 @@ func (bs *BalancedSchedule) Cancel() {
 }
 
 func newBalancedSchedule(opts BalancedScheduleOpts) *BalancedSchedule {
+	if opts.CycleSize == 0 {
+		// prevent zero division in runtime
+		panic("CycleSize must be greater than 0")
+	}
+	if opts.EstimatedStreamers == 0 {
+		opts.EstimatedStreamers = 100
+	}
 	if opts.EstimatedStreamers < opts.CycleSize {
 		opts.CycleSize = opts.EstimatedStreamers
 	}
-
 	if opts.BalanceStrategy == nil {
 		opts.BalanceStrategy = &CountBalance{
 			max: opts.CycleSize,
 		}
 	}
-
 	if opts.Freq == 0 {
 		opts.Freq = time.Minute
 	}

@@ -2,13 +2,35 @@ package tracker
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
 	"pedro.to/rcaptv/helix"
+	"pedro.to/rcaptv/test"
 )
+
+var db *sql.DB
+
+func TestMain(m *testing.M) {
+	conn, pool, res := test.SetupPostgres()
+	db = conn
+
+	// Run tests
+	code := m.Run()
+
+	if err := test.CancelPostgres(pool, res); err != nil {
+		log.Fatal(err)
+	}
+
+	os.Exit(code)
+
+}
 
 func TestDeepFetchClips(t *testing.T) {
 	/*
@@ -174,6 +196,43 @@ func TestFetchVods(t *testing.T) {
 		want := wantVods[i]
 		if got != want {
 			t.Fatalf("expected vod %d to be %s, got %s", i, want, got)
+		}
+	}
+}
+
+func TestTrackerStop(t *testing.T) {
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+
+	tracker := New(&TrackerOpts{
+		Helix:                nil,
+		Context:              ctx,
+		Storage:              nil,
+		TrackingCycleMinutes: 720,
+	})
+	tracker.FakeRun = true
+	tracker.db = db
+
+	timeout := time.After(3 * time.Second)
+	actionTimeout := time.After(1 * time.Second)
+	done := make(chan bool)
+	go func() {
+		if err := tracker.Run(); err != nil {
+			if !errors.Is(err, context.Canceled) {
+				log.Fatal(err)
+			}
+		}
+		done <- true
+	}()
+
+	select {
+	case <-timeout:
+		t.Fatal("tracker did not stop")
+	case <-actionTimeout:
+		cancel()
+	case <-done:
+		if !tracker.stopped {
+			t.Fatal("tracker did not stop")
 		}
 	}
 }
