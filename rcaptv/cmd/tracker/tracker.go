@@ -15,7 +15,7 @@ import (
 	"pedro.to/rcaptv/tracker"
 )
 
-const version = "0.1.1"
+const version = "0.1.3"
 
 func waitSig() os.Signal {
 	sigint := make(chan os.Signal, 1)
@@ -79,8 +79,13 @@ func main() {
 		}
 	}()
 	sig := waitSig()
+
 	l.Warn().Msgf("Termination signal received [%s]. Attempting gracefully shutdown...", sig)
-	l.Info().Msg("Tracker stopped")
+	l.Info().Msg("Closing database")
+	if err := sto.Stop(); err != nil {
+		l.Warn().Err(err).Msg("error closing database")
+	}
+	l.Info().Msg("Stopping tracker")
 	ctxCancel()
 }
 

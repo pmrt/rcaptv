@@ -56,6 +56,10 @@ func (s *Postgres) Opts() *database.StorageOptions {
 	return s.opts
 }
 
+func (s *Postgres) Stop() error {
+	return s.db.Close()
+}
+
 func New(opts *database.StorageOptions) database.Storage {
 	db, err := sql.Open("postgres", fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",

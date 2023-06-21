@@ -17,6 +17,7 @@ type Storage interface {
 	Migrate() error
 	Conn() *sql.DB
 	Opts() *StorageOptions
+	Stop() error
 }
 
 type StorageOptions struct {
