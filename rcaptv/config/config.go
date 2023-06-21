@@ -114,9 +114,9 @@ func LoadVars() {
 		Logger()
 
 	if err := godotenv.Load(); err != nil {
-		l.Panic().
+		l.Warn().
 			Err(err).
-			Msg("couldn't load .env file")
+			Msgf("couldn't load .env file: %s. Using passed environment variables or default values", err.Error())
 	}
 
 	l.Info().Msg("reading environment variables")
