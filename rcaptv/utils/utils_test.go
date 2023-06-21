@@ -35,3 +35,22 @@ func TestPrependWithoutAllocations(t *testing.T) {
 		t.Fatal("expected prepend to make no allocations")
 	}
 }
+
+func TestTruncateSecret(t *testing.T) {
+	tests := []struct {
+		input string
+		n     int
+		want  string
+	}{
+		{input: "123456", n: 3, want: "123XXX"},
+		{input: "ABCDEFGHJK", n: 2, want: "ABXXXXXXXX"},
+		{input: "QWERTYPASSWORD", n: 3, want: "QWEXXXXXXXXXXX"},
+	}
+	for _, test := range tests {
+		got := TruncateSecret(test.input, test.n)
+		want := test.want
+		if got != want {
+			t.Fatalf("wrong truncation, got:%s want:%s", got, want)
+		}
+	}
+}

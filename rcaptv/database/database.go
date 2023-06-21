@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog"
 	l "github.com/rs/zerolog/log"
 	cfg "pedro.to/rcaptv/config"
+	"pedro.to/rcaptv/utils"
 )
 
 type Storage interface {
@@ -48,12 +49,17 @@ func NewWithLogger(sto Storage, l zerolog.Logger) Storage {
 
 	opts := sto.Opts()
 	l.Info().Msg("=> setting up postgres")
-	l.Info().
-		Str("host", opts.StorageHost).
-		Str("port", opts.StoragePort).
-		Str("db", opts.StorageDbName).
-		Str("user", opts.StorageUser).
-		Msg("=> => pinging database")
+	if !cfg.IsProd {
+		l.Info().
+			Str("host", opts.StorageHost).
+			Str("port", opts.StoragePort).
+			Str("db", opts.StorageDbName).
+			Str("user", opts.StorageUser).
+			Str("pass", utils.TruncateSecret(opts.StoragePassword, 3)).
+			Msg("=> => pinging database")
+	} else {
+		l.Info().Msg("=> => pinging database")
+	}
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
 		opts.StorageConnTimeout,

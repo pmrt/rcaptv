@@ -2,6 +2,7 @@ package utils
 
 import (
 	"reflect"
+	"strings"
 	"unsafe"
 )
 
@@ -39,4 +40,8 @@ func Prepend(dst []byte, src []byte) []byte {
 	copy(dst[:l], src)
 	// return dst with the new length
 	return dst
+}
+
+func TruncateSecret(s string, n int) string {
+	return s[:n] + strings.Repeat("X", len(s)-n)
 }
