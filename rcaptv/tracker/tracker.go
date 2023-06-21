@@ -78,9 +78,9 @@ func (t *Tracker) Run() error {
 		bs.Add(streamer.BcID)
 	}
 	l.Info().
-		Uint("EstimatedStreamers", bs.opts.EstimatedStreamers).
-		Uint("CycleSize", bs.opts.CycleSize).
-		Msg("starting scheduler real-time tracking")
+		Msgf("starting scheduler real-time tracking (cycle_size=%d, estimated_streamers=%d)",
+			bs.opts.CycleSize, bs.opts.EstimatedStreamers,
+		)
 	bs.Start()
 
 	for {
@@ -90,7 +90,7 @@ func (t *Tracker) Run() error {
 		case m := <-bs.RealTime():
 			for _, bid := range m.Streamers {
 				bid := bid
-				l.Debug().
+				l.Info().
 					Str("bid", bid).
 					Msg("fetching streamer clips and vods")
 

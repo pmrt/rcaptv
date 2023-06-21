@@ -210,7 +210,7 @@ func (hx *Helix) doAtMost(req *http.Request, attempts int) (*HttpResponse, error
 		req.Header.Set("Client-Id", hx.ClientID())
 	}
 
-	l.Info().
+	l.Debug().
 		Int("attempts_left", attempts).
 		Str("query", req.URL.RawQuery).
 		Msgf("%s: %s", req.Method, req.URL.Path)
