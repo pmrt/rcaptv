@@ -22,6 +22,8 @@ pgdown:
 pgup:
 	migrate -path ./database/postgres/migrations -database postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB_NAME}?sslmode=disable up 1
 	
+build:
+	go build -tags RELEASE -o ./dist/rp_tracker ./cmd/tracker    
 test:
 	go clean -testcache
 	go test -timeout 30s -v ./...
