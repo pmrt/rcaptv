@@ -5,6 +5,7 @@ import (
 )
 
 func TestPrependHash(t *testing.T) {
+	t.Parallel()
 	prefix, hash := "sha256=", "efff62e8394965726992ca425ac5aa9550b4e524e98b936b6bdddc2e86d53990"
 	b1 := make([]byte, 0, 64+7)
 	b1 = append(b1, []byte(hash)...)
@@ -18,6 +19,7 @@ func TestPrependHash(t *testing.T) {
 }
 
 func TestPrependWithoutAllocations(t *testing.T) {
+	t.Parallel()
 	const (
 		n      = 100
 		prefix = "prefix"
@@ -37,6 +39,7 @@ func TestPrependWithoutAllocations(t *testing.T) {
 }
 
 func TestTruncateSecret(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input string
 		n     int
@@ -56,6 +59,7 @@ func TestTruncateSecret(t *testing.T) {
 }
 
 func TestAbs(t *testing.T) {
+	t.Parallel()
 	if Abs(100) != 100 {
 		t.Fatal("expected abs(100) to be 100")
 	}

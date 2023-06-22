@@ -77,6 +77,7 @@ func TestWebhookHeadersValidation(t *testing.T) {
 var secret = []byte("thisisanososecretsecret")
 
 func TestWebhookReplayAttackTimestamp(t *testing.T) {
+	t.Parallel()
 	var body = []byte(`{
     "subscription": {
         "id": "f1c2a387-161a-49f9-a165-0f21d7a4e1c4",
@@ -163,6 +164,7 @@ func TestWebhookReplayAttackTimestamp(t *testing.T) {
 }
 
 func TestWebhookStreamOnline(t *testing.T) {
+	t.Parallel()
 	var onlineEvt *EventStreamOnline
 
 	var body = []byte(`{
@@ -251,6 +253,7 @@ func TestWebhookStreamOnline(t *testing.T) {
 }
 
 func TestWebhookStreamOffline(t *testing.T) {
+	t.Parallel()
 	var onlineEvt *EventStreamOffline
 
 	var body = []byte(`{
@@ -321,6 +324,7 @@ func TestWebhookStreamOffline(t *testing.T) {
 }
 
 func TestWebhookVerification(t *testing.T) {
+	t.Parallel()
 	var body = []byte(`{
     "challenge": "pogchamp-kappa-360noscope-vohiyo",
     "subscription": {
@@ -377,6 +381,7 @@ func TestWebhookVerification(t *testing.T) {
 }
 
 func TestWebhookRevocation(t *testing.T) {
+	t.Parallel()
 	var body = []byte(`{
     "subscription": {
       "id": "f1c2a387-161a-49f9-a165-0f21d7a4e1c4",

@@ -89,6 +89,7 @@ func TestBalancedLowEstimation(t *testing.T) {
 }
 
 func TestBalancedScheduleRealTime1Pick(t *testing.T) {
+	t.Parallel()
 	pickInterval := time.Millisecond * 10
 	r := make([]RealTimeMinute, 0, 5)
 

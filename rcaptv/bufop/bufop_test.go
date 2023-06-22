@@ -7,6 +7,7 @@ import (
 )
 
 func TestAvg(t *testing.T) {
+	t.Parallel()
 	type expect struct {
 		buf    []float32
 		avg    float32

@@ -9,6 +9,7 @@ import (
 )
 
 func TestTrackedChannels(t *testing.T) {
+	t.Parallel()
 	rows, err := Tracked(db)
 	if err != nil {
 		t.Fatal(err)
@@ -35,6 +36,7 @@ func TestTrackedChannels(t *testing.T) {
 }
 
 func TestLastVODByStreamer(t *testing.T) {
+	t.Parallel()
 	rows, err := LastVODByStreamer(db)
 	if err != nil {
 		t.Fatal(err)
@@ -64,6 +66,7 @@ func TestLastVODByStreamer(t *testing.T) {
 }
 
 func TestUpsertClips(t *testing.T) {
+	t.Parallel()
 	vodOffset := 10
 	clips := []*helix.Clip{
 		{
@@ -183,6 +186,7 @@ func TestUpsertClips(t *testing.T) {
 }
 
 func TestUpsertVods(t *testing.T) {
+	t.Parallel()
 	ts1, err := time.Parse(time.RFC3339, "2023-06-14T23:21:38Z")
 	if err != nil {
 		t.Fatal(err)
