@@ -147,7 +147,7 @@ type PaginationManyObj[T any] struct {
 
 // Do handles a http request with twitch pagination.
 //
-// stopFunc(item, all, nreqs) is called after reading and adding each item to the all
+// stopFunc(item, all) is called after reading and adding each item to the all
 // slice. The boolean value returned by the stopFunc() defines when to stop
 // performing more requests.
 //
@@ -155,7 +155,11 @@ type PaginationManyObj[T any] struct {
 // processed, DoWithPagination will perform a new request using the cursor from
 // the previous one. If stopFunc() returns true while processing a element, the
 // loop will break and no more requests will be performed.
-func DoWithPagination[T any](hx *Helix, req *http.Request, stopFunc func(item T, all []T) bool) ([]T, error) {
+func DoWithPagination[T any](
+	hx *Helix, req *http.Request,
+	stopFunc func(item T, all []T) bool,
+	keyFn func(i T) string,
+) ([]T, error) {
 	var (
 		resp   *HttpResponse
 		parsed *PaginationManyObj[T]
@@ -197,7 +201,7 @@ PaginationLoop:
 		}
 		parsed = nil
 	}
-	return all, nil
+	return Deduplicate(all, keyFn), nil
 }
 
 func (hx *Helix) doAtMost(req *http.Request, attemptsLeft int) (*HttpResponse, error) {
@@ -351,6 +355,18 @@ func NewWithoutExchange(opts *HelixOpts, c ...*http.Client) *Helix {
 		hx.opts.HandleRevocation = func(evt *WebhookRevokePayload) {}
 	}
 	return hx
+}
+
+func Deduplicate[T any](s []T, keyFn func(i T) string) []T {
+	r := make([]T, 0, len(s))
+	ht := map[string]bool{}
+	for _, item := range s {
+		if k := keyFn(item); !ht[k] {
+			r = append(r, item)
+			ht[k] = true
+		}
+	}
+	return r
 }
 
 func New(opts *HelixOpts) *Helix {

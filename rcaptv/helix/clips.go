@@ -101,6 +101,8 @@ func (hx *Helix) Clips(p *ClipsParams) (*ClipResponse, error) {
 			return true
 		}
 		return false
+	}, func(c *Clip) string {
+		return c.ClipID
 	})
 	return &ClipResponse{
 		Clips:      clips,

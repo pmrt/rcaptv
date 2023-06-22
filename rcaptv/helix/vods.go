@@ -115,7 +115,9 @@ func (hx *Helix) Vods(p *VODParams) ([]*VOD, error) {
 	if err != nil {
 		return nil, err
 	}
-	vods, err := DoWithPagination[*VOD](hx, req, pagFunc)
+	vods, err := DoWithPagination[*VOD](hx, req, pagFunc, func(v *VOD) string {
+		return v.VideoID
+	})
 	if err != nil {
 		return nil, err
 	}
