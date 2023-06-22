@@ -16,7 +16,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const version = "0.1.4"
+const version = "0.1.5"
 
 func waitSig() os.Signal {
 	sigint := make(chan os.Signal, 1)
