@@ -45,3 +45,10 @@ func Prepend(dst []byte, src []byte) []byte {
 func TruncateSecret(s string, n int) string {
 	return s[:n] + strings.Repeat("X", len(s)-n)
 }
+
+func Abs(x int) int {
+	if x < 0 {
+		return ^x + 1
+	}
+	return x
+}

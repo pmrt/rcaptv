@@ -11,8 +11,9 @@ import (
 	"pedro.to/rcaptv/database"
 	"pedro.to/rcaptv/database/postgres"
 	"pedro.to/rcaptv/helix"
-	"pedro.to/rcaptv/logger"
 	"pedro.to/rcaptv/tracker"
+
+	"github.com/rs/zerolog/log"
 )
 
 const version = "0.1.3"
@@ -30,7 +31,7 @@ func waitSig() os.Signal {
 }
 
 func main() {
-	l := logger.New("tracker", "main")
+	l := log.With().Str("ctx", "main").Logger()
 	l.Info().Msgf("Tracker starting (v%s)", version)
 	if !cfg.IsProd {
 		l.Warn().Msg("[!] Running tracker in dev mode")
@@ -44,7 +45,8 @@ func main() {
 	ctx := context.Background()
 	ctx, ctxCancel := context.WithCancel(ctx)
 
-	sto := database.NewWithLogger(postgres.New(
+	l.Info().Msg("initializing database (postgres)")
+	sto := database.New(postgres.New(
 		&database.StorageOptions{
 			StorageHost:     cfg.PostgresHost,
 			StoragePort:     cfg.PostgresPort,
@@ -59,17 +61,20 @@ func main() {
 
 			MigrationVersion: cfg.PostgresMigVersion,
 			MigrationPath:    cfg.PostgresMigPath,
-		}), l)
-	hx := helix.NewWithLogger(&helix.HelixOpts{
+		}))
+
+	l.Info().Msg("initializing helix client (using credentials)")
+	hx := helix.New(&helix.HelixOpts{
 		Creds: helix.ClientCreds{
 			ClientID:     cfg.HelixClientID,
 			ClientSecret: cfg.HelixClientSecret,
 		},
 		APIUrl:           cfg.APIUrl,
 		EventsubEndpoint: cfg.EventSubEndpoint,
-	}, l)
+	})
 
 	go func() {
+		l.Info().Msg("starting tracker service")
 		if err := tracker.New(&tracker.TrackerOpts{
 			Helix:   hx,
 			Context: ctx,
@@ -80,12 +85,12 @@ func main() {
 	}()
 	sig := waitSig()
 
-	l.Warn().Msgf("Termination signal received [%s]. Attempting gracefully shutdown...", sig)
-	l.Info().Msg("Closing database")
+	l.Info().Msgf("termination signal received [%s]. Attempting gracefully shutdown...", sig)
+	l.Info().Msg("closing database")
 	if err := sto.Stop(); err != nil {
 		l.Warn().Err(err).Msg("error closing database")
 	}
-	l.Info().Msg("Stopping tracker")
+	l.Info().Msg("stopping tracker")
 	ctxCancel()
 }
 

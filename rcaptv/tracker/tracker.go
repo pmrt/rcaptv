@@ -7,10 +7,10 @@ import (
 	"math"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	cfg "pedro.to/rcaptv/config"
 	"pedro.to/rcaptv/database"
 	"pedro.to/rcaptv/helix"
-	"pedro.to/rcaptv/logger"
 	"pedro.to/rcaptv/repo"
 )
 
@@ -54,22 +54,21 @@ type Tracker struct {
 }
 
 func (t *Tracker) Run() error {
-	l := logger.New("tracker", "tracker")
-	l.Info().Msg("=> starting tracker service")
+	l := log.With().Str("ctx", "tracker").Logger()
 
-	l.Info().Msg("=> => fetching streamer list from database")
+	l.Info().Msg("fetching streamer list from database")
 	streamers, err := repo.Tracked(t.db)
 	if err != nil {
 		return err
 	}
 	lenbc := len(streamers)
-	l.Info().Msgf("=> => => %d streamers loaded", lenbc)
+	l.Info().Msgf("%d streamers loaded", lenbc)
 
-	l.Info().Msg("=> => loading last VOD table")
+	l.Info().Msg("loading last VOD table")
 	t.lastVIDByStreamer = NewLastVODTable(lenbc)
 	t.lastVIDByStreamer.FromDB(t.db)
 
-	l.Info().Msg("=> => initializing scheduler")
+	l.Info().Msg("initializing scheduler")
 	bs := newBalancedSchedule(BalancedScheduleOpts{
 		CycleSize:          uint(t.TrackingCycleMinutes),
 		EstimatedStreamers: uint(lenbc),
@@ -90,12 +89,8 @@ func (t *Tracker) Run() error {
 		case m := <-bs.RealTime():
 			for _, bid := range m.Streamers {
 				bid := bid
-				l.Info().
-					Str("bid", bid).
-					Msg("fetching streamer clips and vods")
-
 				if !cfg.IsProd && t.FakeRun {
-					l.Warn().Msg("skipping fetches in fake run mode")
+					l.Warn().Msg("skipping run in FakeRun mode")
 					continue
 				}
 
@@ -108,28 +103,37 @@ func (t *Tracker) Run() error {
 				// the numbers to find out rate limits and the right cycle size
 				clips, err := t.FetchClips(bid)
 				if err != nil {
-					l.Err(err).Msg("failed to fetch clips")
+					l.Err(err).Msgf("failed to fetch clips (bid:%s)", bid)
 				}
 				vods, err := t.FetchVods(bid)
 				if err != nil {
 					if errors.Is(err, ErrEmptyVODs) {
 						// TODO - update tracked_channels.seen_inactive_count
-						l.Warn().Msgf("got no vods for streamer %s", bid)
+						l.Warn().Msgf("got no VODs for streamer (bid:%s)", bid)
 					} else {
-						l.Err(err).Msg("failed to fetch vods")
+						l.Err(err).Msg("failed to fetch VODs")
 					}
 				}
 
-				if len(clips) > 0 {
+				lenc, lenv := len(clips), len(vods)
+				if lenc > 0 {
 					if err := repo.UpsertClips(t.db, clips); err != nil {
-						l.Err(err).Msg("failed to upsert clips")
+						l.Err(err).Msgf("failed to upsert clips (clips:%d)",
+							lenc,
+						)
 					}
 				}
-				if len(vods) > 0 {
+				if lenv > 0 {
 					if err := repo.UpsertVods(t.db, vods); err != nil {
-						l.Err(err).Msg("failed to upsert vods")
+						l.Err(err).Msgf("failed to upsert VODs (VODs:%d)",
+							lenv,
+						)
 					}
 				}
+				l.Info().Msgf(
+					"[balanced_key:%d] updated clips:%d and VODs:%d (bid:%s)",
+					m.Min, lenc, lenv, bid,
+				)
 			}
 		case <-t.ctx.Done():
 			l.Info().Msg("stopping scheduler real-time tracking")
@@ -211,10 +215,8 @@ func (t *Tracker) deepFetchClips(bid string, lvl int, from time.Time, to time.Ti
 	}
 	// If next level is too deep, we stop here and return the current results
 	if lvl+1 > t.ClipTrackingMaxDeepLevel {
-		l := logger.New("tracker", "fetch_clips")
-		l.Info().
-			Str("bid", bid).
-			Msgf("incomplete clip results after max deep level reached")
+		l := log.With().Str("ctx", "tracker").Logger()
+		l.Warn().Msgf("incomplete clip results after max deep level reached (bid:%s)", bid)
 		return clipsResp.Clips, nil
 	}
 

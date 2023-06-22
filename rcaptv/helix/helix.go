@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/oauth2/clientcredentials"
 	"golang.org/x/oauth2/twitch"
-	"pedro.to/rcaptv/logger"
+	"pedro.to/rcaptv/utils"
 )
 
 const (
@@ -147,7 +147,7 @@ type PaginationManyObj[T any] struct {
 
 // Do handles a http request with twitch pagination.
 //
-// stopFunc(item, all) is called after reading and adding each item to the all
+// stopFunc(item, all, nreqs) is called after reading and adding each item to the all
 // slice. The boolean value returned by the stopFunc() defines when to stop
 // performing more requests.
 //
@@ -200,9 +200,10 @@ PaginationLoop:
 	return all, nil
 }
 
-func (hx *Helix) doAtMost(req *http.Request, attempts int) (*HttpResponse, error) {
-	l := logger.New("", "helix")
-	if attempts <= 0 {
+func (hx *Helix) doAtMost(req *http.Request, attemptsLeft int) (*HttpResponse, error) {
+	lctx := log.With().
+		Str("ctx", "helix")
+	if attemptsLeft <= 0 {
 		return nil, ErrTooManyRequestAttempts
 	}
 
@@ -210,10 +211,15 @@ func (hx *Helix) doAtMost(req *http.Request, attempts int) (*HttpResponse, error
 		req.Header.Set("Client-Id", hx.ClientID())
 	}
 
-	l.Debug().
-		Int("attempts_left", attempts).
-		Str("query", req.URL.RawQuery).
-		Msgf("%s: %s", req.Method, req.URL.Path)
+	attempts := utils.Abs(attemptsLeft-HttpMaxAttempts) + 1
+	l := lctx.
+		Int("attempts", attempts).
+		Str("endpoint", req.URL.Path).
+		Logger()
+
+	l.Info().Msgf("%s: %s %s (attempts:%d)",
+		req.Method, req.URL.Path, req.URL.RawQuery, attempts,
+	)
 	resp, err := hx.c.Do(req)
 	if err != nil {
 		return nil, err
@@ -244,17 +250,24 @@ func (hx *Helix) doAtMost(req *http.Request, attempts int) (*HttpResponse, error
 		if err != nil {
 			return nil, err
 		}
+		l.Warn().Msgf("ratelimit reached for %s: %s %s. Retry: %s (attempts:%d)",
+			req.Method, req.URL.Path, req.URL.RawQuery, d, attempts,
+		)
 		time.Sleep(d + time.Second)
-		attempts--
-		return hx.doAtMost(req, attempts)
+		attemptsLeft--
+		return hx.doAtMost(req, attemptsLeft)
 	case http.StatusInternalServerError:
 	case http.StatusBadGateway:
 	case http.StatusServiceUnavailable:
 	case http.StatusGatewayTimeout:
+		l.Warn().Msgf("got HTTP %d from provider for %s: %s %s. Retry %s (attempts:%d)",
+			resp.StatusCode, req.Method, req.URL.Path, req.URL.RawQuery,
+			HttpRetryDelay, attempts,
+		)
 		// Retry some 5XX twitch responses for resiliency
 		time.Sleep(HttpRetryDelay)
-		attempts--
-		return hx.doAtMost(req, attempts)
+		attemptsLeft--
+		return hx.doAtMost(req, attemptsLeft)
 	case http.StatusUnauthorized:
 		return nil, ErrUnauthorized
 	case http.StatusBadRequest:
@@ -344,13 +357,4 @@ func New(opts *HelixOpts) *Helix {
 	hx := NewWithoutExchange(opts)
 	hx.Exchange()
 	return hx
-}
-
-func NewWithLogger(opts *HelixOpts, l zerolog.Logger) *Helix {
-	l.UpdateContext(func(c zerolog.Context) zerolog.Context {
-		return c.Str("context", "helix")
-	})
-
-	l.Info().Msg("=> initializing helix client (using credentials)")
-	return New(opts)
 }

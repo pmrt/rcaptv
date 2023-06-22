@@ -100,9 +100,12 @@ func conv(v string, to reflect.Kind) any {
 func Env[T SupportStringconv](key string, def T) T {
 	if v, ok := os.LookupEnv(key); ok {
 		val := conv(v, reflect.TypeOf(def).Kind()).(T)
-		l.Debug().
-			Str("ctx", "config").
-			Msgf("=> [%s]: %v", key, val)
+		if !IsProd {
+			// security measure to prevent logging secrets in prod
+			l.Debug().
+				Str("ctx", "config").
+				Msgf("=> [%s]: %v", key, val)
+		}
 		return val
 	}
 	return def

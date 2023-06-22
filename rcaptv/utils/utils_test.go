@@ -54,3 +54,21 @@ func TestTruncateSecret(t *testing.T) {
 		}
 	}
 }
+
+func TestAbs(t *testing.T) {
+	if Abs(100) != 100 {
+		t.Fatal("expected abs(100) to be 100")
+	}
+	if Abs(-100) != 100 {
+		t.Fatal("expected abs(-100) to be 100")
+	}
+	if Abs(142340) != 142340 {
+		t.Fatal("expected abs(142340) to be 142340")
+	}
+	if Abs(-142340) != 142340 {
+		t.Fatal("expected abs(-142340) to be 142340")
+	}
+	if Abs(0) != 0 {
+		t.Fatal("expected abs(0) to be 0")
+	}
+}
