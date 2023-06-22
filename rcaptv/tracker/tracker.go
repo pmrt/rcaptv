@@ -76,9 +76,10 @@ func (t *Tracker) Run() error {
 	for _, streamer := range streamers {
 		bs.Add(streamer.BcID)
 	}
+	cs := bs.opts.CycleSize
 	l.Info().
 		Msgf("starting scheduler real-time tracking (cycle_size=%d, estimated_streamers=%d)",
-			bs.opts.CycleSize, bs.opts.EstimatedStreamers,
+			cs, bs.opts.EstimatedStreamers,
 		)
 	bs.Start()
 
@@ -131,8 +132,8 @@ func (t *Tracker) Run() error {
 					}
 				}
 				l.Info().Msgf(
-					"[balanced_key:%d] updated clips:%d and VODs:%d (bid:%s)",
-					m.Min, lenc, lenv, bid,
+					"[balanced_key:%d/%d] updated clips:%d and VODs:%d (bid:%s)",
+					m.Min, cs-1, lenc, lenv, bid,
 				)
 			}
 		case <-t.ctx.Done():
