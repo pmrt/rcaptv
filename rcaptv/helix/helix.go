@@ -38,6 +38,7 @@ var (
 	ErrUnexpectedStatusCode   = errors.New("unexpected status code")
 	ErrBodyResponseTooBig     = errors.New("response body too big")
 	ErrBodyEmpty              = errors.New("response body empty")
+	ErrItemsEmpty             = errors.New("no items returned")
 	ErrBadRequest             = errors.New("bad request")
 	ErrNotFound               = errors.New("not found")
 )
@@ -182,6 +183,10 @@ PaginationLoop:
 			return nil, err
 		}
 
+		items := parsed.Data
+		if len(items) == 0 {
+			return nil, ErrItemsEmpty
+		}
 		for _, item := range parsed.Data {
 			item := item
 			all = append(all, item)

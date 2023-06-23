@@ -1,6 +1,7 @@
 package helix
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -61,6 +62,43 @@ func TestHelixClip(t *testing.T) {
 		if got != want {
 			t.Fatalf("unexpected clip id got: %s, want %s", got, want)
 		}
+	}
+}
+
+func TestHelixClipEmpty(t *testing.T) {
+	t.Parallel()
+	clipsJson := []byte(`{"data":[],"pagination":{}}`)
+	wantQuery := "broadcaster_id=58753574&first=100"
+
+	sv := httptest.NewServer(http.HandlerFunc(func(resp http.ResponseWriter, r *http.Request) {
+		if r.URL.RawQuery != wantQuery {
+			t.Fatalf("bad query got: %s, want %s", r.URL.RawQuery, wantQuery)
+		}
+		resp.Write(clipsJson)
+	}))
+	defer sv.Close()
+
+	hx := &Helix{
+		opts: &HelixOpts{
+			APIUrl: sv.URL,
+		},
+		c: sv.Client(),
+	}
+	clipsResp, err := hx.Clips(&ClipsParams{
+		BroadcasterID:            "58753574",
+		StopViewsThreshold:       8,
+		ViewsThresholdWindowSize: 3,
+	})
+	if err != nil {
+		if !errors.Is(err, ErrItemsEmpty) {
+			t.Fatal(err)
+		}
+	} else {
+		t.Fatal("expected err to be ErrItemsEmpty")
+	}
+
+	if len(clipsResp.Clips) != 0 {
+		t.Fatal("expected 0 clips")
 	}
 }
 

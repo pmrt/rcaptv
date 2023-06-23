@@ -15,7 +15,8 @@ import (
 )
 
 var (
-	ErrEmptyVODs = errors.New("got empty VODs for given streamer")
+	ErrEmptyVODs  = errors.New("no VODs found")
+	ErrEmptyClips = errors.New("no clips found")
 )
 
 type lastVODTable map[string]string
@@ -104,13 +105,18 @@ func (t *Tracker) Run() error {
 				// the numbers to find out rate limits and the right cycle size
 				clips, err := t.FetchClips(bid)
 				if err != nil {
-					l.Err(err).Msgf("failed to fetch clips (bid:%s)", bid)
+					if errors.Is(err, ErrEmptyClips) {
+						// TODO - track maybe track this too. Add no clips count to db
+						l.Warn().Msgf("no clips found (bid:%s)", bid)
+					} else {
+						l.Err(err).Msgf("failed to fetch clips (bid:%s)", bid)
+					}
 				}
 				vods, err := t.FetchVods(bid)
 				if err != nil {
 					if errors.Is(err, ErrEmptyVODs) {
 						// TODO - update tracked_channels.seen_inactive_count
-						l.Warn().Msgf("got no VODs for streamer (bid:%s)", bid)
+						l.Warn().Msgf("no VODs found (bid:%s)", bid)
 					} else {
 						l.Err(err).Msg("failed to fetch VODs")
 					}
@@ -166,10 +172,10 @@ func (t *Tracker) FetchVods(bid string) ([]*helix.VOD, error) {
 
 	vods, err := t.hx.Vods(opts)
 	if err != nil {
+		if errors.Is(err, helix.ErrItemsEmpty) {
+			return nil, ErrEmptyVODs
+		}
 		return nil, err
-	}
-	if len(vods) == 0 {
-		return nil, ErrEmptyVODs
 	}
 	t.lastVIDByStreamer[bid] = vods[0].VideoID
 	return vods, nil
@@ -201,6 +207,7 @@ func (t *Tracker) FetchClips(bid string) ([]*helix.Clip, error) {
 }
 
 func (t *Tracker) deepFetchClips(bid string, lvl int, from time.Time, to time.Time) ([]*helix.Clip, error) {
+	l := log.With().Str("ctx", "tracker").Logger()
 	clipsResp, err := t.hx.Clips(&helix.ClipsParams{
 		BroadcasterID:            bid,
 		StopViewsThreshold:       t.ClipViewThreshold,
@@ -209,6 +216,9 @@ func (t *Tracker) deepFetchClips(bid string, lvl int, from time.Time, to time.Ti
 		EndedAt:                  to,
 	})
 	if err != nil {
+		if errors.Is(err, helix.ErrItemsEmpty) {
+			return nil, ErrEmptyClips
+		}
 		return nil, err
 	}
 	if clipsResp.IsComplete {
@@ -216,14 +226,20 @@ func (t *Tracker) deepFetchClips(bid string, lvl int, from time.Time, to time.Ti
 	}
 	// If next level is too deep, we stop here and return the current results
 	if lvl+1 > t.ClipTrackingMaxDeepLevel {
-		l := log.With().Str("ctx", "tracker").Logger()
-		l.Warn().Msgf("incomplete clip results after max deep level reached (bid:%s)", bid)
+		l.Warn().Msgf("incomplete clip results after clip_tracking_max_deep_level=%d "+
+			"reached for period from=%s to=%s (bid:%s) ",
+			cfg.ClipTrackingMaxDeepLevel, from.Format(time.RFC3339), to.Format(time.RFC3339), bid)
 		return clipsResp.Clips, nil
 	}
 
 	nReqs := math.Pow(2, float64(lvl))
 	partHours := float64(t.ClipTrackingWindowHours) / nReqs
 	all := make([]*helix.Clip, 0, 100*2)
+	l.Debug().Msgf("(bid:%s) incomplete clip results for period from=%s to=%s. "+
+		"Deepening (lvl:%d/%d, part_hours:%f, n_reqs:%f)",
+		bid, from.Format(time.RFC3339), to.Format(time.RFC3339), lvl,
+		t.ClipTrackingMaxDeepLevel, partHours, nReqs,
+	)
 	// left and right in the binary tree
 	for i := 0; i < 2; i++ {
 		to := from.Add(time.Duration(partHours) * time.Hour)

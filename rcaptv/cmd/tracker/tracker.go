@@ -16,8 +16,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const version = "0.1.6"
-
 func waitSig() os.Signal {
 	sigint := make(chan os.Signal, 1)
 	signal.Notify(
@@ -32,7 +30,7 @@ func waitSig() os.Signal {
 
 func main() {
 	l := log.With().Str("ctx", "main").Logger()
-	l.Info().Msgf("tracker starting (v%s)", version)
+	l.Info().Msgf("tracker starting (v%s)", cfg.Version)
 	if !cfg.IsProd {
 		l.Warn().Msg("[!] tunning tracker in dev mode")
 	}

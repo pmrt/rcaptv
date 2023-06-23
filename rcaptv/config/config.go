@@ -11,6 +11,7 @@ import (
 	"pedro.to/rcaptv/logger"
 )
 
+const Version = "0.1.7"
 const LastMigrationVersion = 1
 
 var (

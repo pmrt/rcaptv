@@ -1,6 +1,7 @@
 package helix
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -178,7 +179,11 @@ func TestHelixVODEmpty(t *testing.T) {
 		Period:        Week,
 	})
 	if err != nil {
-		t.Fatal(err)
+		if !errors.Is(err, ErrItemsEmpty) {
+			t.Fatal(err)
+		}
+	} else {
+		t.Fatal("expected ErrItemsEmpty error")
 	}
 
 	if len(vods) != 0 {
