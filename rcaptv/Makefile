@@ -21,9 +21,18 @@ pgdown:
 # migrate postgres 1 step up
 pgup:
 	migrate -path ./database/postgres/migrations -database postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB_NAME}?sslmode=disable up 1
-	
+
 build:
-	go build -tags RELEASE -o ./dist/rp_tracker ./cmd/tracker    
+	go build -tags RELEASE -o ./dist/rp_tracker ./cmd/tracker
+	go build -tags RELEASE -o ./dist/rcaptv ./cmd/rcaptv
+
+start:
+	docker compose up --build
+start_tracker:
+	docker compose up pg_db tracker --build
+start_web:
+	docker compose up pg_db rcaptv --build
+
 test:
 	go clean -testcache
 	go test -timeout 30s -v ./...

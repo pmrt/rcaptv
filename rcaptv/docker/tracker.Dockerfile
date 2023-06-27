@@ -12,6 +12,7 @@ COPY . .
 # Build. Don't use libc, the resulting binary will be statically linked agasint
 # the libraries
 ENV CGO_ENABLED=0
-RUN go build -tags RELEASE -o /usr/local/bin/tracker ./cmd/tracker
+# RUN go build -tags RELEASE -o /usr/local/bin/tracker ./cmd/tracker
+RUN go build -o /usr/local/bin/tracker ./cmd/tracker
 
 ENTRYPOINT [ "tracker" ]
