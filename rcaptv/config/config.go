@@ -14,11 +14,16 @@ import (
 const Version = "0.1.7"
 const LastMigrationVersion = 1
 
+var loaded = false
+
 var (
+	TrackerPostgresUser                   string
+	TrackerPostgresPassword               string
+	RcaptvPostgresUser                    string
+	RcaptvPostgresPassword                string
+
 	PostgresHost                   string
 	PostgresPort                   string
-	PostgresUser                   string
-	PostgresPassword               string
 	PostgresDBName                 string
 	PostgresMaxIdleConns           int
 	PostgresMaxOpenConns           int
@@ -38,6 +43,9 @@ var (
 	APIUrl           string
 	APIPort          string
 	EventSubEndpoint string
+	RateLimitMaxConns int
+	RateLimitExpSeconds int
+
 
 	TrackingCycleMinutes     int
 	ClipTrackingWindowHours  int
@@ -127,8 +135,10 @@ func LoadVars() {
 
 	PostgresHost = Env("POSTGRES_HOST", "127.0.0.1")
 	PostgresPort = Env("POSTGRES_PORT", "5432")
-	PostgresUser = Env("POSTGRES_USER", "tracker")
-	PostgresPassword = Env("POSTGRES_PASSWORD", "unsafepassword")
+	TrackerPostgresUser = Env("TRACKER_POSTGRES_USER", "tracker")
+	TrackerPostgresPassword = Env("TRACKER_POSTGRES_PASSWORD", "unsafepassword")
+	RcaptvPostgresUser = Env("RCAPTV_POSTGRES_USER", "rcaptv")
+	RcaptvPostgresPassword = Env("RCAPTV_POSTGRES_PASSWORD", "unsafepassword")
 	PostgresDBName = Env("POSTGRES_DB_NAME", "tracker")
 	PostgresMaxIdleConns = Env("POSTGRES_MAX_IDLE_CONNS", 5)
 	PostgresMaxOpenConns = Env("POSTGRES_MAX_OPEN_CONNS", 10)
@@ -148,6 +158,8 @@ func LoadVars() {
 	APIPort = Env("API_PORT", "8080")
 	APIUrl = Env("API_URL", "https://api.twitch.tv/helix")
 	EventSubEndpoint = Env("EVENTSUB_ENDPOINT", "/eventsub")
+	RateLimitMaxConns = Env("RATE_LIMIT_MAX_CONNS", 20)
+	RateLimitExpSeconds = Env("RATE_LIMIT_EXP_SECONDS", 60)
 
 	TrackingCycleMinutes = Env("TRACKING_CYCLE_MINUTES", 720)
 	ClipTrackingWindowHours = Env("CLIP_TRACKING_WINDOW_HOURS", 7*24)
@@ -163,6 +175,10 @@ func LoadVars() {
 }
 
 func Setup() {
+	if (loaded) {
+		return
+	}
 	logger.SetupLogger()
 	LoadVars()
+	loaded = true
 }

@@ -2,9 +2,6 @@ package main
 
 import (
 	"context"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	cfg "pedro.to/rcaptv/config"
@@ -12,21 +9,10 @@ import (
 	"pedro.to/rcaptv/database/postgres"
 	"pedro.to/rcaptv/helix"
 	"pedro.to/rcaptv/tracker"
+	"pedro.to/rcaptv/utils"
 
 	"github.com/rs/zerolog/log"
 )
-
-func waitSig() os.Signal {
-	sigint := make(chan os.Signal, 1)
-	signal.Notify(
-		sigint,
-		os.Interrupt,
-		syscall.SIGINT,
-		syscall.SIGTERM,
-		syscall.SIGQUIT,
-	)
-	return <-sigint
-}
 
 func main() {
 	l := log.With().Str("ctx", "main").Logger()
@@ -48,8 +34,8 @@ func main() {
 		&database.StorageOptions{
 			StorageHost:     cfg.PostgresHost,
 			StoragePort:     cfg.PostgresPort,
-			StorageUser:     cfg.PostgresUser,
-			StoragePassword: cfg.PostgresPassword,
+			StorageUser:     cfg.TrackerPostgresUser,
+			StoragePassword: cfg.TrackerPostgresPassword,
 			StorageDbName:   cfg.PostgresDBName,
 
 			StorageMaxIdleConns:    cfg.PostgresMaxIdleConns,
@@ -81,7 +67,7 @@ func main() {
 			l.Panic().Err(err).Msg("tracker returned an error")
 		}
 	}()
-	sig := waitSig()
+	sig := utils.WaitInterrupt()
 
 	l.Info().Msgf("termination signal received [%s]. Attempting gracefully shutdown...", sig)
 	l.Info().Msg("closing database")

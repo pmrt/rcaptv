@@ -39,13 +39,13 @@ type VOD struct {
 	StreamID       string    `json:"stream_id" alias:"vods.stream_id"`
 	CreatedAt      time.Time `json:"created_at" alias:"vods.created_at"`
 	PublishedAt    time.Time `json:"published_at" alias:"vods.published_at"`
-	DurationString string    `json:"duration"`
+	DurationString string    `json:"duration,omitempty"`
 	Lang           string    `json:"language" alias:"vods.lang"`
 	Title          string    `json:"title" alias:"vods.title"`
 	ThumbnailURL   string    `json:"thumbnail_url" alias:"vods.thumbnail_url"`
 	ViewCount      int       `json:"view_count" alias:"vods.view_count"`
 
-	Duration int32 `alias:"vods.duration_seconds"`
+	Duration int32 `json:"duration_seconds" alias:"vods.duration_seconds"`
 }
 
 func (v *VOD) DurationSeconds() (int32, error) {

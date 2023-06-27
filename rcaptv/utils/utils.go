@@ -1,10 +1,26 @@
 package utils
 
 import (
+	"os"
+	"os/signal"
 	"reflect"
 	"strings"
+	"syscall"
 	"unsafe"
 )
+
+func WaitInterrupt() os.Signal {
+	sigint := make(chan os.Signal, 1)
+	signal.Notify(
+		sigint,
+		os.Interrupt,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT,
+	)
+	return <-sigint
+}
+
 
 func StrPtr(s string) *string {
 	return &s
