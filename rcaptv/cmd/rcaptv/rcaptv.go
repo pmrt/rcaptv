@@ -11,6 +11,7 @@ import (
 	cfg "pedro.to/rcaptv/config"
 	"pedro.to/rcaptv/database"
 	"pedro.to/rcaptv/database/postgres"
+	"pedro.to/rcaptv/helix"
 	"pedro.to/rcaptv/logger"
 	"pedro.to/rcaptv/utils"
 )
@@ -63,9 +64,18 @@ func main() {
 	}
 	app.Use(logger.Fiber())
 
-	api := api.New(sto)
+	hx := helix.New(&helix.HelixOpts{
+		Creds: helix.ClientCreds{
+			ClientID:     cfg.HelixClientID,
+			ClientSecret: cfg.HelixClientSecret,
+		},
+		APIUrl:           cfg.APIUrl,
+		EventsubEndpoint: cfg.EventSubEndpoint,
+	})
+	api := api.New(sto, hx)
 	v1 := app.Group("/v1")
 	v1.Get("/vods", api.Vods)
+	v1.Get("/clips", api.Clips)
 
 	go func() {
 		l.Info().Msgf("rcaptv server listening on port:%s", cfg.APIPort)
