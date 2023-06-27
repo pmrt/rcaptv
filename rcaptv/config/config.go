@@ -45,6 +45,7 @@ var (
 	EventSubEndpoint string
 	RateLimitMaxConns int
 	RateLimitExpSeconds int
+	ClipsMaxPeriodDiffHours int
 
 
 	TrackingCycleMinutes     int
@@ -160,6 +161,7 @@ func LoadVars() {
 	EventSubEndpoint = Env("EVENTSUB_ENDPOINT", "/eventsub")
 	RateLimitMaxConns = Env("RATE_LIMIT_MAX_CONNS", 20)
 	RateLimitExpSeconds = Env("RATE_LIMIT_EXP_SECONDS", 60)
+	ClipsMaxPeriodDiffHours = Env("CLIPS_MAX_PERIOD_DIFF_HOURS", 168)
 
 	TrackingCycleMinutes = Env("TRACKING_CYCLE_MINUTES", 720)
 	ClipTrackingWindowHours = Env("CLIP_TRACKING_WINDOW_HOURS", 7*24)

@@ -72,7 +72,14 @@ func main() {
 		APIUrl:           cfg.APIUrl,
 		EventsubEndpoint: cfg.EventSubEndpoint,
 	})
-	api := api.New(sto, hx)
+	api := api.New(api.APIOpts{
+		Helix: hx,
+		Storage: sto,
+		ClipsMaxPeriodDiffHours: cfg.ClipsMaxPeriodDiffHours,
+})
+	app.Get("/health", func(c *fiber.Ctx) error {
+		return c.Status(http.StatusOK).Send([]byte("ok"))
+	})
 	v1 := app.Group("/v1")
 	v1.Get("/vods", api.Vods)
 	v1.Get("/clips", api.Clips)

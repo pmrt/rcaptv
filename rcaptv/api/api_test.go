@@ -169,6 +169,7 @@ func TestClips(t *testing.T) {
 	api := &API{
 		db: db,
 		hx: hx,
+		clipsMaxPeriodDiffHours: 168,
 	}
 
 	app := fiber.New()
@@ -200,6 +201,66 @@ func TestClips(t *testing.T) {
 
 	opts := jsondiff.DefaultConsoleOptions()
 	if res, diff := jsondiff.Compare(wantClipsJson, body, &opts); res != jsondiff.FullMatch {
+		t.Fatal(diff)
+	}
+}
+
+func TestClipsPeriodTooLarge(t *testing.T) {
+	t.Parallel()
+	wantJson := []byte(`{"data":{"clips":[]},"errors":["period between 'started_at' and 'ended_at' is too large"]}`)
+	bid := "152633332"
+	start := "2023-06-18T00:46:30Z"
+	end := "2023-06-26T15:07:30Z"
+
+	sv := httptest.NewServer(http.HandlerFunc(func(resp http.ResponseWriter, r *http.Request) {
+		if at := r.URL.Query().Get("started_at"); at != start {
+			t.Fatalf("expected started_at %q, got %q", start, at)
+		}
+		if at := r.URL.Query().Get("ended_at"); at != end {
+			t.Fatalf("expected ended_at %q, got %q", end, at)
+		}
+		if bcId := r.URL.Query().Get("broadcaster_id"); bcId != bid {
+			t.Fatalf("expected bid %q, got %q", bid, bcId)
+		}
+		resp.Write(respClipsJson)
+	}))
+	hx := helix.NewWithoutExchange(&helix.HelixOpts{
+		APIUrl: sv.URL,
+	}, sv.Client())
+	api := &API{
+		db: db,
+		hx: hx,
+		clipsMaxPeriodDiffHours: 168,
+	}
+
+	app := fiber.New()
+	app.Get("/clips", api.Clips)
+
+	params := url.Values{}
+	params.Add("bid", bid)
+	params.Add("started_at", start)
+	params.Add("ended_at", end)
+	req := httptest.NewRequest(
+		"GET",
+		fmt.Sprintf("/clips?%s", params.Encode()),
+		nil,
+	)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(string(body))
+	if resp.StatusCode != 400 {
+		t.Fatalf("expected http 200, got %d", resp.StatusCode)
+	}
+
+	opts := jsondiff.DefaultConsoleOptions()
+	if res, diff := jsondiff.Compare(wantJson, body, &opts); res != jsondiff.FullMatch {
 		t.Fatal(diff)
 	}
 }
