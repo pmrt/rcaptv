@@ -184,28 +184,35 @@ func (t *Tracker) FetchVods(bid string) ([]*helix.VOD, error) {
 // FetchClips for a given broadcaster ID in a rolling window specified by
 // ClipTrackingWindowHours. Clips obtained will stop if they don't meet a view
 // threshold in a rolling window average. Both specified correspondingly by
-// ClipViewThreshold and ClipViewWindowSize
+// ClipViewThreshold and ClipViewWindowSize. See hx.DeepClips for more details.
 //
-// Twitch API returns after consuming all the pages in pagination a maximum of
-// 1000 items for a given request. To avoid incomplete data FetchClips performs
-// a deep fetch, where it first performs a request for our predefined window.
-// If the response didn't reach the minimum threshold because the 1000 clips
-// have a large number of views, we consider the response incomplete and we
-// would divide the window in 2, performing another 2 requests, etc. up to a
-// maximum specified by ClipTrackingMaxDeepLevel.
-//
-// Maximum number of requests per streamer is `2^(maxlevel-1)+2(maxlevel-2) ...
-// 2^(maxlevel-m) ... 2^0` e.g.: if max_level=3;max_requests/streamer=7
-//
-// For example, if ClipTrackingWindowHours is set to 168 hours (7 days), and
-// the response is marked as incomplete, we would perform another 2 requests
-// for the ranges 0-84 and 84-168 hours in the corresponding rolling window
+// TODO - Test this. This was moved to helix.DeepClips and the unit test is
+// very similar to this function so if it passes this should pass too, but it
+// may be interesting to test it even if it is duplicated just in case this
+// changes in the future
 func (t *Tracker) FetchClips(bid string) ([]*helix.Clip, error) {
 	now := time.Now()
 	from := now.Add(-time.Duration(t.ClipTrackingWindowHours) * time.Hour)
-	return t.deepFetchClips(bid, 1, from, now)
+	clips, err := t.hx.DeepClips(&helix.DeepClipsParams{
+		ClipsParams: &helix.ClipsParams{
+			BroadcasterID:            bid,
+			StartedAt: from,
+			EndedAt: now,
+			StopViewsThreshold: t.ClipViewThreshold,
+			ViewsThresholdWindowSize: t.ClipViewWindowSize,
+		},
+		MaxDeepLvl:     t.ClipTrackingMaxDeepLevel,
+	})
+	if err != nil {
+		if errors.Is(err, helix.ErrItemsEmpty) {
+			return nil, ErrEmptyClips
+		}
+		return nil, err
+	}
+	return clips, nil
 }
 
+// Deprecated: use hx.DeepClips instead
 func (t *Tracker) deepFetchClips(bid string, lvl int, from time.Time, to time.Time) ([]*helix.Clip, error) {
 	l := log.With().Str("ctx", "tracker").Logger()
 	clipsResp, err := t.hx.Clips(&helix.ClipsParams{
