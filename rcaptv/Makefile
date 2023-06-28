@@ -26,6 +26,10 @@ build:
 	go build -tags RELEASE -o ./dist/rp_tracker ./cmd/tracker
 	go build -tags RELEASE -o ./dist/rcaptv ./cmd/rcaptv
 
+build_dev:
+	go build -o ./dist/rp_tracker ./cmd/tracker
+	go build -o ./dist/rcaptv ./cmd/rcaptv
+
 start:
 	docker compose up --build
 start_tracker:

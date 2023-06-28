@@ -46,14 +46,14 @@ func (a *API) Vods(c *fiber.Ctx) error {
 		Vods: make([]*helix.VOD, 0, 5),
 	})
 
-	bid := c.Query("bid")
-	if bid == "" {
-		resp.Errors = append(resp.Errors, "Missing bid")
+	username := c.Query("username")
+	if username == "" {
+		resp.Errors = append(resp.Errors, "Missing username")
 		return c.Status(http.StatusBadRequest).JSON(resp)
 	}
 
 	vods, err := repo.Vods(a.db, &repo.VodsParams{
-		BcID: bid,
+		BcUsername: username,
 	})
 	if err != nil {
 		resp.Errors = append(resp.Errors, "Unexpected error")

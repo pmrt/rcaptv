@@ -48,7 +48,7 @@ func TestVods(t *testing.T) {
 	app.Get("/vods", api.Vods)
 
 	params := url.Values{}
-	params.Add("bid", "90075649")
+	params.Add("username", "IlloJuan")
 	req := httptest.NewRequest(
 		"GET",
 		fmt.Sprintf("/vods?%s", params.Encode()),
@@ -75,7 +75,7 @@ func TestVods(t *testing.T) {
 
 func TestVodsEmpty(t *testing.T) {
 	t.Parallel()
-	wantJson := []byte(`{"data":{"vods":[]},"errors":["Missing bid"]}`)
+	wantJson := []byte(`{"data":{"vods":[]},"errors":["Missing username"]}`)
 
 	api := &API{
 		db: db,
@@ -120,7 +120,7 @@ func TestVodsUnknownBID(t *testing.T) {
 	app.Get("/vods", api.Vods)
 
 	params := url.Values{}
-	params.Add("bid", "1234")
+	params.Add("username", "NonExistingUser")
 	req := httptest.NewRequest(
 		"GET",
 		fmt.Sprintf("/vods?%s", params.Encode()),

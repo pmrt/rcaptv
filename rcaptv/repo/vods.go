@@ -2,6 +2,7 @@ package repo
 
 import (
 	"database/sql"
+	"strings"
 
 	. "github.com/go-jet/jet/v2/postgres"
 
@@ -12,9 +13,14 @@ import (
 type VodsParams struct {
 	VideoIDs []string
 	BcID string
+	BcUsername string
 }
 
 func Vods(db *sql.DB, p *VodsParams) (r []*helix.VOD, err error) {
+	// TODO - fix vods by id and username return results in different order.
+	if p.BcUsername != "" {
+		return vodsByStreamer(db, p)
+	}
 	stmt := SELECT(
 		tbl.Vods.AllColumns,
 	).FROM(tbl.Vods)
@@ -32,6 +38,25 @@ func Vods(db *sql.DB, p *VodsParams) (r []*helix.VOD, err error) {
 		tbl.Vods.BcID.EQ(String(bid)),
 		)
 	}
+
+	if err = stmt.Query(db, &r); err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+func vodsByStreamer(db *sql.DB, p *VodsParams) (r []*helix.VOD, err error) {
+	username := strings.ToLower(p.BcUsername)
+	stmt := SELECT(
+		tbl.Vods.AllColumns,
+	).FROM(
+		tbl.Vods.INNER_JOIN(
+			tbl.TrackedChannels,
+			tbl.TrackedChannels.BcID.EQ(tbl.Vods.BcID),
+		),
+	).WHERE(
+		tbl.TrackedChannels.BcUsername.EQ(String(username)),
+	).ORDER_BY(tbl.Vods.CreatedAt.DESC())
 
 	if err = stmt.Query(db, &r); err != nil {
 		return nil, err

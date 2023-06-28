@@ -51,5 +51,6 @@ CREATE TABLE IF NOT EXISTS clips (
 );
 
 CREATE INDEX video_id_idx ON clips USING btree (video_id);
+CREATE INDEX username_idx ON tracked_channels USING btree (bc_username);
 
 COMMIT;

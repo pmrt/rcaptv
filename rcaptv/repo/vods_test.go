@@ -37,6 +37,23 @@ func TestLastVODByStreamer(t *testing.T) {
 	}
 }
 
+func TestVodsByStreamer(t *testing.T) {
+	vods, err := Vods(db, &VodsParams{
+		BcUsername: "IlloJuan", // display name should work too
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantIds := []string{"1847800606", "1846954069", "1846151378", "1845269425"}
+	for i, vod := range vods {
+		got := vod.VideoID
+		want := wantIds[i]
+		if got != want {
+			t.Fatalf("unexpected vod, got %s, want %s", got, want)
+		}
+	}
+}
+
 func TestUpsertVods(t *testing.T) {
 	t.Parallel()
 	ts1, err := time.Parse(time.RFC3339, "2023-06-14T23:21:38Z")

@@ -1,6 +1,7 @@
 BEGIN;
 
 DROP INDEX IF EXISTS video_id_idx;
+DROP INDEX IF EXISTS username_idx;
 
 DROP TABLE IF EXISTS clips;
 DROP TABLE IF EXISTS vods;
