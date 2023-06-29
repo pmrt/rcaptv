@@ -2,7 +2,6 @@ package repo
 
 import (
 	"database/sql"
-	"fmt"
 	"strings"
 
 	. "github.com/go-jet/jet/v2/postgres"
@@ -64,7 +63,6 @@ func Vods(db *sql.DB, p *VodsParams) ([]*helix.VOD, error) {
 		if err := stmt2.Query(db, &r2); err != nil {
 			return nil, err
 		}
-		fmt.Println(stmt2.DebugSql())
 		r = append(r, r2...)
 	}
 	return r, nil
