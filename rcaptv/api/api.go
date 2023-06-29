@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -10,6 +11,7 @@ import (
 	"pedro.to/rcaptv/database"
 	"pedro.to/rcaptv/helix"
 	"pedro.to/rcaptv/repo"
+	"pedro.to/rcaptv/utils"
 )
 
 type APIOpts struct {
@@ -47,13 +49,25 @@ func (a *API) Vods(c *fiber.Ctx) error {
 	})
 
 	username := c.Query("username")
-	if username == "" {
-		resp.Errors = append(resp.Errors, "Missing username")
-		return c.Status(http.StatusBadRequest).JSON(resp)
-	}
+	vid := c.Query("vid")
 
+	var vids = make([]string, 0, 1)
+	if username == "" {
+		if vid == "" {
+			resp.Errors = append(resp.Errors, "Missing username or vid")
+			return c.Status(http.StatusBadRequest).JSON(resp)
+		}
+		vids = append(vids, vid)
+	}
+	ext, err := strconv.Atoi(c.Query("extend", "0"))
+	if err != nil {
+			resp.Errors = append(resp.Errors, "Bad extend value")
+			return c.Status(http.StatusBadRequest).JSON(resp)
+	}
 	vods, err := repo.Vods(a.db, &repo.VodsParams{
+		VideoIDs: vids,
 		BcUsername: username,
+		Extend: utils.Min(ext, 5),
 	})
 	if err != nil {
 		resp.Errors = append(resp.Errors, "Unexpected error")

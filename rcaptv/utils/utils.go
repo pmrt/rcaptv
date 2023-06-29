@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"math"
 	"os"
 	"os/signal"
 	"reflect"
@@ -64,7 +65,21 @@ func TruncateSecret(s string, n int) string {
 
 func Abs(x int) int {
 	if x < 0 {
+		if x == int(math.Inf(-1)) {
+			// if x = int(math.Inf(-1)) = -9223372036854775808, to prevent a negative number
+			// we cause an overflow and turn math.Inf(-1) into math.Inf(1)-1. It's not perfect
+			// because we Inf is bigger than math.Inf(1)-1 but probably ok for most cases
+			return x-1
+		}
 		return ^x + 1
 	}
 	return x
+}
+
+func Min(x, y int) int {
+	x, y = Abs(x), Abs(y)
+	if x < y {
+		return x
+	}
+	return y
 }

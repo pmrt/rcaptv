@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"math"
 	"testing"
 )
 
@@ -74,5 +75,37 @@ func TestAbs(t *testing.T) {
 	}
 	if Abs(0) != 0 {
 		t.Fatal("expected abs(0) to be 0")
+	}
+	if Abs(int(math.Inf(-1))) != 9223372036854775807 {
+		t.Fatal("expected abs(Inf(-1)) to be 0")
+	}
+}
+
+func TestMin(t *testing.T) {
+	tests := []struct {
+		a, b int
+		want int
+	}{
+		{a: 6, b: 5, want: 5},
+		{a: 10, b: 5, want: 5},
+		{a: 0, b: 5, want: 0},
+		{a: 4, b: 5, want: 4},
+		{a: -1, b: 5, want: 1},
+		{a: -1, b: 0, want: 0},
+		{a: 0, b: int(math.Inf(1)), want: 0},
+		{a: 0, b: int(math.Inf(-1)), want: 0},
+		{a: -0, b: 0, want: 0},
+		{a: 4, b: 4, want: 4},
+		{a: -6, b: 5, want: 5},
+		{a: -9223372036854775807, b: 5, want: 5},
+		{a: -9223372036854775808, b: 5, want: 5},
+		{a: 9223372036854775807, b: 5, want: 5},
+	}
+	for i, test := range tests {
+		got := Min(test.a, test.b)
+		want := test.want
+		if got != want {
+			t.Fatalf("wrong min, test#%d got:%d want:%d", i+1, got, want)
+		}
 	}
 }

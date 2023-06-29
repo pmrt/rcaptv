@@ -166,3 +166,22 @@ func TestUpsertVods(t *testing.T) {
 		t.Fatalf("expected view count to be 10000, got %d", got[0].ViewCount)
 	}
 }
+
+func TestVodsExtend(t *testing.T) {
+	vods, err := Vods(db, &VodsParams{
+		VideoIDs: []string{"1847800606"},
+		Extend: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantIds := []string{"1847800606", "1846954069", "1846151378"}
+	for i, vod := range vods {
+		got := vod.VideoID
+		want := wantIds[i]
+		if got != want {
+			t.Fatalf("unexpected vod, got %s, want %s", got, want)
+		}
+	}
+}

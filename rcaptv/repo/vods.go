@@ -2,6 +2,7 @@ package repo
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 
 	. "github.com/go-jet/jet/v2/postgres"
@@ -14,9 +15,14 @@ type VodsParams struct {
 	VideoIDs []string
 	BcID string
 	BcUsername string
+	// If Extend > 0, Vods() will use `created_at` column of the last VOD
+	// obtained and append the `Extend` number of VODs following the `created_at`
+	// timestamp order. Extend won't work for Vods() querying by BcUsername, it's
+	// mostly useful for queries with a single videoID
+	Extend int
 }
 
-func Vods(db *sql.DB, p *VodsParams) (r []*helix.VOD, err error) {
+func Vods(db *sql.DB, p *VodsParams) ([]*helix.VOD, error) {
 	if p.BcUsername != "" {
 		return vodsByStreamer(db, p)
 	}
@@ -39,8 +45,27 @@ func Vods(db *sql.DB, p *VodsParams) (r []*helix.VOD, err error) {
 	}
 	stmt = stmt.ORDER_BY(tbl.Vods.CreatedAt.DESC())
 
-	if err = stmt.Query(db, &r); err != nil {
+	var r []*helix.VOD
+	if err := stmt.Query(db, &r); err != nil {
 		return nil, err
+	}
+
+	if p.Extend > 0 && len(r) > 0{
+		lastRow := r[len(r)-1]
+		stmt2 := SELECT(
+			tbl.Vods.AllColumns,
+		).FROM(tbl.Vods).
+		WHERE(
+			tbl.Vods.CreatedAt.LT(TimestampT(lastRow.CreatedAt)).
+		AND(
+			tbl.Vods.BcID.EQ(String(lastRow.BroadcasterID)),
+		)).ORDER_BY(tbl.Vods.CreatedAt.DESC()).LIMIT(int64(p.Extend))
+		var r2 []*helix.VOD
+		if err := stmt2.Query(db, &r2); err != nil {
+			return nil, err
+		}
+		fmt.Println(stmt2.DebugSql())
+		r = append(r, r2...)
 	}
 	return r, nil
 }
