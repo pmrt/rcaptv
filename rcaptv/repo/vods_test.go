@@ -95,6 +95,7 @@ func TestUpsertVods(t *testing.T) {
 	UpsertVods(db, vods)
 	got, err := Vods(db, &VodsParams{
 		VideoIDs: []string{"18464727000", "1845909001"},
+		First: 2,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -146,6 +147,7 @@ func TestUpsertVods(t *testing.T) {
 	UpsertVods(db, vods2)
 	got, err = Vods(db, &VodsParams{
 		VideoIDs: []string{"18464727000", "1845909001"},
+		First: 2,
 	})
 	if err != nil {
 		t.Fatal(err)

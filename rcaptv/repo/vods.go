@@ -19,9 +19,13 @@ type VodsParams struct {
 	// timestamp order. Extend won't work for Vods() querying by BcUsername, it's
 	// mostly useful for queries with a single videoID
 	Extend int
+	First int
 }
 
 func Vods(db *sql.DB, p *VodsParams) ([]*helix.VOD, error) {
+	if p.First == 0 {
+		p.First = 1
+	}
 	if p.BcUsername != "" {
 		return vodsByStreamer(db, p)
 	}
@@ -42,7 +46,8 @@ func Vods(db *sql.DB, p *VodsParams) ([]*helix.VOD, error) {
 		tbl.Vods.BcID.EQ(String(bid)),
 		)
 	}
-	stmt = stmt.ORDER_BY(tbl.Vods.CreatedAt.DESC())
+	stmt = stmt.ORDER_BY(tbl.Vods.CreatedAt.DESC()).
+		LIMIT(int64(p.First))
 
 	var r []*helix.VOD
 	if err := stmt.Query(db, &r); err != nil {
@@ -79,7 +84,7 @@ func vodsByStreamer(db *sql.DB, p *VodsParams) (r []*helix.VOD, err error) {
 		),
 	).WHERE(
 		tbl.TrackedChannels.BcUsername.EQ(String(username)),
-	).ORDER_BY(tbl.Vods.CreatedAt.DESC())
+	).ORDER_BY(tbl.Vods.CreatedAt.DESC()).LIMIT(int64(p.First))
 
 	if err = stmt.Query(db, &r); err != nil {
 		return nil, err
