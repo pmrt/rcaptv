@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS clips (
   vod_offset int
 );
 
-CREATE INDEX video_id_idx ON clips USING btree (video_id);
-CREATE INDEX username_idx ON tracked_channels USING btree (bc_username);
+CREATE INDEX IF NOT EXISTS video_id_idx ON clips USING btree (video_id);
+CREATE INDEX IF NOT EXISTS username_idx ON tracked_channels USING btree (bc_username);
+CREATE INDEX IF NOT EXISTS vods_created_at_idx ON vods USING btree (created_at DESC);
 
 COMMIT;

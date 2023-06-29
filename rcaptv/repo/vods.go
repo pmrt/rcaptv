@@ -17,7 +17,6 @@ type VodsParams struct {
 }
 
 func Vods(db *sql.DB, p *VodsParams) (r []*helix.VOD, err error) {
-	// TODO - fix vods by id and username return results in different order.
 	if p.BcUsername != "" {
 		return vodsByStreamer(db, p)
 	}
@@ -38,6 +37,7 @@ func Vods(db *sql.DB, p *VodsParams) (r []*helix.VOD, err error) {
 		tbl.Vods.BcID.EQ(String(bid)),
 		)
 	}
+	stmt = stmt.ORDER_BY(tbl.Vods.CreatedAt.DESC())
 
 	if err = stmt.Query(db, &r); err != nil {
 		return nil, err

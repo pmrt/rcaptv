@@ -18,7 +18,7 @@ func main() {
 	l := log.With().Str("ctx", "main").Logger()
 	l.Info().Msgf("tracker starting (v%s)", cfg.Version)
 	if !cfg.IsProd {
-		l.Warn().Msg("[!] tunning tracker in dev mode")
+		l.Warn().Msg("[!] running tracker in dev mode")
 	}
 	if cfg.Debug {
 		l.Warn().Msg("log level: debug")
