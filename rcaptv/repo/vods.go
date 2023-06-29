@@ -20,6 +20,8 @@ type VodsParams struct {
 	// mostly useful for queries with a single videoID
 	Extend int
 	First int
+	// After returns the First rows after `after` videoID
+	After string
 }
 
 func Vods(db *sql.DB, p *VodsParams) ([]*helix.VOD, error) {
@@ -32,6 +34,9 @@ func Vods(db *sql.DB, p *VodsParams) ([]*helix.VOD, error) {
 	stmt := SELECT(
 		tbl.Vods.AllColumns,
 	).FROM(tbl.Vods)
+	if p.After != "" {
+		p.VideoIDs = []string{p.After}
+	}
 	if l := len(p.VideoIDs); l > 0 {
 		ids := make([]Expression, 0, l)
 		for _, v := range p.VideoIDs {
@@ -54,21 +59,33 @@ func Vods(db *sql.DB, p *VodsParams) ([]*helix.VOD, error) {
 		return nil, err
 	}
 
-	if p.Extend > 0 && len(r) > 0{
-		lastRow := r[len(r)-1]
-		stmt2 := SELECT(
-			tbl.Vods.AllColumns,
-		).FROM(tbl.Vods).
-		WHERE(
-			tbl.Vods.CreatedAt.LT(TimestampT(lastRow.CreatedAt)).
-		AND(
-			tbl.Vods.BcID.EQ(String(lastRow.BroadcasterID)),
-		)).ORDER_BY(tbl.Vods.CreatedAt.DESC()).LIMIT(int64(p.Extend))
-		var r2 []*helix.VOD
-		if err := stmt2.Query(db, &r2); err != nil {
-			return nil, err
+	if len(r) > 0 {
+		lastVod := r[len(r)-1]
+		if p.After != "" {
+			return vodsAfter(db, lastVod, p.First)
 		}
-		r = append(r, r2...)
+		if p.Extend > 0 {
+			vods, err := vodsAfter(db, lastVod, p.Extend)
+			if err != nil {
+				return nil, err
+			}
+			r = append(r, vods...)
+		}
+	}
+	return r, nil
+}
+
+func vodsAfter(db *sql.DB, lastVod *helix.VOD, limit int) (r []*helix.VOD, err error) {
+	stmt := SELECT(
+		tbl.Vods.AllColumns,
+	).FROM(tbl.Vods).
+	WHERE(
+		tbl.Vods.CreatedAt.LT(TimestampT(lastVod.CreatedAt)).
+	AND(
+		tbl.Vods.BcID.EQ(String(lastVod.BroadcasterID)),
+	)).ORDER_BY(tbl.Vods.CreatedAt.DESC()).LIMIT(int64(limit))
+	if err := stmt.Query(db, &r); err != nil {
+		return nil, err
 	}
 	return r, nil
 }

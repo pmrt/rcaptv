@@ -54,6 +54,24 @@ func TestVodsByStreamer(t *testing.T) {
 	}
 }
 
+func TestVodAfter(t *testing.T) {
+	vods, err := Vods(db, &VodsParams{
+		After: "1847800606",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantIds := []string{"1846954069"}
+	for i, vod := range vods {
+		got := vod.VideoID
+		want := wantIds[i]
+		if got != want {
+			t.Fatalf("unexpected vod, got %s, want %s", got, want)
+		}
+	}
+}
+
+
 func TestUpsertVods(t *testing.T) {
 	t.Parallel()
 	ts1, err := time.Parse(time.RFC3339, "2023-06-14T23:21:38Z")

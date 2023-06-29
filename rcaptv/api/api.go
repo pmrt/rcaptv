@@ -16,7 +16,7 @@ import (
 
 type APIOpts struct {
 	Storage database.Storage
-	Helix *helix.Helix
+	Helix   *helix.Helix
 	// Max difference between start/end for clips.
 	ClipsMaxPeriodDiffHours int
 }
@@ -29,13 +29,13 @@ type API struct {
 }
 
 type APIResponse[T any] struct {
-	Data T `json:"data"`
+	Data   T        `json:"data"`
 	Errors []string `json:"errors"`
 }
 
 func NewResponse[T any](data T) *APIResponse[T] {
 	return &APIResponse[T]{
-		Data: data,
+		Data:   data,
 		Errors: make([]string, 0, 2),
 	}
 }
@@ -43,6 +43,7 @@ func NewResponse[T any](data T) *APIResponse[T] {
 type VodsResponse struct {
 	Vods []*helix.VOD `json:"vods"`
 }
+
 func (a *API) Vods(c *fiber.Ctx) error {
 	resp := NewResponse(&VodsResponse{
 		Vods: make([]*helix.VOD, 0, 5),
@@ -50,24 +51,29 @@ func (a *API) Vods(c *fiber.Ctx) error {
 
 	username := c.Query("username")
 	vid := c.Query("vid")
+	after := c.Query("after")
 
 	var vids = make([]string, 0, 1)
 	if username == "" {
 		if vid == "" {
-			resp.Errors = append(resp.Errors, "Missing username or vid")
-			return c.Status(http.StatusBadRequest).JSON(resp)
+			if after == "" {
+				resp.Errors = append(resp.Errors, "Missing username, after or vid")
+				return c.Status(http.StatusBadRequest).JSON(resp)
+			}
+		} else {
+			vids = append(vids, vid)
 		}
-		vids = append(vids, vid)
 	}
 	ext, err := strconv.Atoi(c.Query("extend", "0"))
 	if err != nil {
-			resp.Errors = append(resp.Errors, "Bad extend value")
-			return c.Status(http.StatusBadRequest).JSON(resp)
+		resp.Errors = append(resp.Errors, "Bad extend value")
+		return c.Status(http.StatusBadRequest).JSON(resp)
 	}
 	vods, err := repo.Vods(a.db, &repo.VodsParams{
-		VideoIDs: vids,
+		VideoIDs:   vids,
 		BcUsername: username,
-		Extend: utils.Min(ext, 5),
+		Extend:     utils.Min(ext, 5),
+		After:      after,
 	})
 	if err != nil {
 		resp.Errors = append(resp.Errors, "Unexpected error")
@@ -81,6 +87,7 @@ func (a *API) Vods(c *fiber.Ctx) error {
 type ClipsResponse struct {
 	Clips []*helix.Clip `json:"clips"`
 }
+
 // Clips
 // - `bid` string Broacaster ID
 // - `started_at` string Start range time of creation of the clip in RFC3339
@@ -114,8 +121,8 @@ func (a *API) Clips(c *fiber.Ctx) error {
 
 	started, err := time.Parse(time.RFC3339, started_at)
 	if err != nil {
-			resp.Errors = append(resp.Errors, "Invalid 'started_at'")
-			return c.Status(http.StatusBadRequest).JSON(resp)
+		resp.Errors = append(resp.Errors, "Invalid 'started_at'")
+		return c.Status(http.StatusBadRequest).JSON(resp)
 	}
 	ended, err := time.Parse(time.RFC3339, ended_at)
 	if err != nil {
@@ -130,10 +137,10 @@ func (a *API) Clips(c *fiber.Ctx) error {
 
 	clips, err := a.hx.DeepClips(&helix.DeepClipsParams{
 		ClipsParams: &helix.ClipsParams{
-			BroadcasterID: bid,
-			StartedAt: started,
-			EndedAt: ended,
-			StopViewsThreshold: cfg.ClipViewThreshold,
+			BroadcasterID:            bid,
+			StartedAt:                started,
+			EndedAt:                  ended,
+			StopViewsThreshold:       cfg.ClipViewThreshold,
 			ViewsThresholdWindowSize: cfg.ClipViewWindowSize,
 		},
 		MaxDeepLvl: cfg.ClipTrackingMaxDeepLevel,
@@ -148,11 +155,11 @@ func (a *API) Clips(c *fiber.Ctx) error {
 
 func New(opts APIOpts) *API {
 	if opts.ClipsMaxPeriodDiffHours == 0 {
-		opts.ClipsMaxPeriodDiffHours = 24*7
+		opts.ClipsMaxPeriodDiffHours = 24 * 7
 	}
 	return &API{
-		db: opts.Storage.Conn(),
-		hx: opts.Helix,
+		db:                      opts.Storage.Conn(),
+		hx:                      opts.Helix,
 		clipsMaxPeriodDiffHours: opts.ClipsMaxPeriodDiffHours,
 	}
 }
