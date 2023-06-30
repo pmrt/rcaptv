@@ -2,6 +2,8 @@ package api
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -79,6 +81,16 @@ func (a *API) Vods(c *fiber.Ctx) error {
 		resp.Errors = append(resp.Errors, "Unexpected error")
 		return c.Status(http.StatusInternalServerError).JSON(resp)
 	}
+	if len(vods) == 0 {
+		if username != "" {
+			resp.Errors = append(resp.Errors, fmt.Sprintf("Username '%s' not found", username))
+		} else if vid != "" {
+			resp.Errors = append(resp.Errors, fmt.Sprintf("VOD '%s' not found", vid))
+		} else if after != "" {
+			resp.Errors = append(resp.Errors, fmt.Sprintf("No VODS after '%s' found", after))
+		}
+		return c.Status(http.StatusNotFound).JSON(resp)
+	}
 
 	resp.Data.Vods = append(resp.Data.Vods, vods...)
 	return c.Status(http.StatusOK).JSON(resp)
@@ -146,6 +158,10 @@ func (a *API) Clips(c *fiber.Ctx) error {
 		MaxDeepLvl: cfg.ClipTrackingMaxDeepLevel,
 	})
 	if err != nil {
+		if errors.Is(err, helix.ErrItemsEmpty) {
+			resp.Errors = append(resp.Errors, fmt.Sprintf("No clips found for the provided streamer (bid:'%s')", bid))
+			return c.Status(http.StatusNotFound).JSON(resp)
+		}
 		resp.Errors = append(resp.Errors, "Unexpected error")
 		return c.Status(http.StatusInternalServerError).JSON(resp)
 	}
