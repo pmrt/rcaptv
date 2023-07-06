@@ -184,7 +184,7 @@ func TestVodsEmpty(t *testing.T) {
 
 func TestVodsUnknownBID(t *testing.T) {
 	t.Parallel()
-	wantJson := []byte(`{"data":{"vods":[]},"errors":["Username 'NonExistingUser' not found"]}`)
+	wantJson := []byte(`{"data":{"vods":[]},"errors":["Username 'NonExistingUser' not found. The channel may not be tracked by us."]}`)
 
 	api := &API{
 		db: db,
@@ -376,7 +376,7 @@ func TestClipsEmpty(t *testing.T) {
 func TestClipsUnknownBID(t *testing.T) {
 	t.Parallel()
 	clipsJson := []byte(`{"data":[],"pagination":{}}`)
-	wantJson := []byte(`{"data":{"clips":[]},"errors":["No clips found for the provided streamer (bid:'1234')"]}`)
+	wantJson := []byte(`{"data":{"clips":[]},"errors":["No clips found for the provided streamer (bid:'1234'). Are clips enabled for this streamer?"]}`)
 
 	bid := "1234"
 	start := "2023-06-18T00:46:30Z"

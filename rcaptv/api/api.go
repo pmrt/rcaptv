@@ -83,7 +83,8 @@ func (a *API) Vods(c *fiber.Ctx) error {
 	}
 	if len(vods) == 0 {
 		if username != "" {
-			resp.Errors = append(resp.Errors, fmt.Sprintf("Username '%s' not found", username))
+			// TODO - this is a good thing to log, so we know which channels are our users interested in
+			resp.Errors = append(resp.Errors, fmt.Sprintf("Username '%s' not found. The channel may not be tracked by us.", username))
 		} else if vid != "" {
 			resp.Errors = append(resp.Errors, fmt.Sprintf("VOD '%s' not found", vid))
 		} else if after != "" {
@@ -159,7 +160,7 @@ func (a *API) Clips(c *fiber.Ctx) error {
 	})
 	if err != nil {
 		if errors.Is(err, helix.ErrItemsEmpty) {
-			resp.Errors = append(resp.Errors, fmt.Sprintf("No clips found for the provided streamer (bid:'%s')", bid))
+			resp.Errors = append(resp.Errors, fmt.Sprintf("No clips found for the provided streamer (bid:'%s'). Are clips enabled for this streamer?", bid))
 			return c.Status(http.StatusNotFound).JSON(resp)
 		}
 		resp.Errors = append(resp.Errors, "Unexpected error")
