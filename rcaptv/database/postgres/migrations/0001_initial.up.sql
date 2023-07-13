@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS vods (
 CREATE TABLE IF NOT EXISTS clips (
   clip_id varchar PRIMARY KEY,
   bc_id varchar NOT NULL REFERENCES tracked_channels(bc_id),
-  -- Keep in mind some video_id's are not just vods
+  -- Keep in mind some video_id's are not vods
   video_id varchar,
   created_at timestamp NOT NULL,
   creator_id varchar NOT NULL,
