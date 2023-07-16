@@ -9,7 +9,6 @@ import (
 )
 
 func TestUpsertUser(t *testing.T) {
-	t.Parallel()
 	twitchCreatedAt, err := time.Parse(time.RFC3339, "2015-05-02T17:47:43Z")
 	if err != nil {
 		t.Fatal(err)
@@ -81,4 +80,6 @@ func TestUpsertUser(t *testing.T) {
 	if *u.CreatedAt != *createdAt {
 		t.Fatalf("created_at should not be updated, expect: %s, got: %s", createdAt, u.CreatedAt)
 	}
+
+	cleanupUserAndTokens()
 }

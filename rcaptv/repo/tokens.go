@@ -3,6 +3,7 @@ package repo
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	. "github.com/go-jet/jet/v2/postgres"
@@ -14,6 +15,9 @@ import (
 type TokenPairParams struct {
 	UserID      int64
 	AccessToken string
+
+	// whether to include invalid tokens (default:false)
+	Invalid bool
 }
 
 func TokenPair(db *sql.DB, p TokenPairParams) ([]*oauth2.Token, error) {
@@ -25,12 +29,12 @@ func TokenPair(db *sql.DB, p TokenPairParams) ([]*oauth2.Token, error) {
 	stmt := SELECT(
 		tbl.TokenPairs.AllColumns,
 	).FROM(tbl.TokenPairs)
-
-	where := tbl.TokenPairs.UserID.EQ(Int(p.UserID)).AND(
-		tbl.TokenPairs.ExpiresAt.GT(TimestampT(nowPlus10s)),
-	)
+	where := tbl.TokenPairs.UserID.EQ(Int(p.UserID))
 	if p.AccessToken != "" {
 		where = where.AND(tbl.TokenPairs.AccessToken.EQ(String(p.AccessToken)))
+	}
+	if !p.Invalid {
+		where = where.AND(tbl.TokenPairs.ExpiresAt.GT(TimestampT(nowPlus10s)))
 	}
 	stmt = stmt.WHERE(where)
 
@@ -77,10 +81,29 @@ func UpsertTokenPair(db *sql.DB, userID int64, t *oauth2.Token) error {
 	return nil
 }
 
-func DeleteExpired(db *sql.DB) error {
+type DeleteExpiredParams struct {
+	UserID       int64
+	TokenAccess  string
+	RefreshToken string
+}
+
+func DeleteExpired(db *sql.DB, p *DeleteExpiredParams) error {
 	nowPlus10s := time.Now().Add(10 * time.Second)
-	stmt := tbl.TokenPairs.DELETE().
-		WHERE(tbl.TokenPairs.ExpiresAt.LT(TimestampT(nowPlus10s)))
+	stmt := tbl.TokenPairs.DELETE()
+	where := tbl.TokenPairs.ExpiresAt.LT(TimestampT(nowPlus10s))
+	if p != nil {
+		if p.UserID != 0 {
+			where = where.AND(tbl.TokenPairs.UserID.EQ(Int(p.UserID)))
+		}
+		if p.TokenAccess != "" {
+			where = where.AND(tbl.TokenPairs.AccessToken.EQ(String(p.TokenAccess)))
+		}
+		if p.RefreshToken != "" {
+			where = where.AND(tbl.TokenPairs.RefreshToken.EQ(String(p.RefreshToken)))
+		}
+	}
+	stmt = stmt.WHERE(where)
+	fmt.Println(stmt.DebugSql())
 	res, err := stmt.Exec(db)
 	if err != nil {
 		return err

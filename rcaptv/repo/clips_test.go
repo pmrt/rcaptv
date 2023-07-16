@@ -7,7 +7,6 @@ import (
 )
 
 func TestUpsertClips(t *testing.T) {
-	t.Parallel()
 	vodOffset := 10
 	clips := []*helix.Clip{
 		{

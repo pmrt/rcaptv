@@ -10,8 +10,6 @@ import (
 )
 
 func TestUpsertAndSelectTokenPair(t *testing.T) {
-	t.Parallel()
-
 	twitchCreatedAt, err := time.Parse(time.RFC3339, "2015-05-02T17:47:43Z")
 	if err != nil {
 		t.Fatal(err)
@@ -78,11 +76,10 @@ func TestUpsertAndSelectTokenPair(t *testing.T) {
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
+	cleanupUserAndTokens()
 }
 
 func TestTokenPairAccessToken(t *testing.T) {
-	t.Parallel()
-
 	twitchCreatedAt, err := time.Parse(time.RFC3339, "2015-05-02T17:47:43Z")
 	if err != nil {
 		t.Fatal(err)
@@ -167,6 +164,7 @@ func TestTokenPairAccessToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	spew.Dump(tks)
 	got, want := len(tks), 0
 	if got != want {
 		t.Fatalf("expected %d invalid tokens, got %d", want, got)
@@ -188,11 +186,10 @@ func TestTokenPairAccessToken(t *testing.T) {
 	if gotToken != wantToken {
 		t.Fatalf("got %q, want %q", gotToken, wantToken)
 	}
+	cleanupUserAndTokens()
 }
 
 func TestDeleteExpired(t *testing.T) {
-	t.Parallel()
-
 	twitchCreatedAt, err := time.Parse(time.RFC3339, "2015-05-02T17:47:43Z")
 	if err != nil {
 		t.Fatal(err)
@@ -278,7 +275,7 @@ func TestDeleteExpired(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := DeleteExpired(db); err != nil {
+	if err := DeleteExpired(db, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -305,4 +302,107 @@ func TestDeleteExpired(t *testing.T) {
 	if got != want {
 		t.Fatalf("expected %d valid tokens, got %d", want, got)
 	}
+	cleanupUserAndTokens()
+}
+
+func TestDeleteExpiredSingle(t *testing.T) {
+	twitchCreatedAt, err := time.Parse(time.RFC3339, "2015-05-02T17:47:43Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := UpsertUser(db, &helix.User{
+		Id:              "90075649",
+		Login:           "illojuan",
+		DisplayName:     "IlloJuan",
+		Email:           "test@email.com",
+		ProfileImageURL: "https://static-cdn.jtvnw.net/jtv_user_pictures/37454f0e-581b-42ba-b95b-416f3113fd37-profile_image-300x300.png",
+		BroadcasterType: "partner",
+		CreatedAt:       helix.RFC3339Timestamp(twitchCreatedAt),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 4 invalid tokens
+	if err = UpsertTokenPair(db, id, &oauth2.Token{
+		AccessToken:  "ACCESS1",
+		RefreshToken: "REFRESH1",
+		Expiry:       time.Now(),
+		TokenType:    "Bearer",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err = UpsertTokenPair(db, id, &oauth2.Token{
+		AccessToken:  "ACCESS2",
+		RefreshToken: "REFRESH2",
+		Expiry:       time.Now(),
+		TokenType:    "Bearer",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err = UpsertTokenPair(db, id, &oauth2.Token{
+		AccessToken:  "ACCESS3",
+		RefreshToken: "REFRESH3",
+		Expiry:       time.Now(),
+		TokenType:    "Bearer",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err = UpsertTokenPair(db, id, &oauth2.Token{
+		AccessToken:  "ACCESS4",
+		RefreshToken: "REFRESH4",
+		Expiry:       time.Now(),
+		TokenType:    "Bearer",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := DeleteExpired(db, &DeleteExpiredParams{
+		UserID:      id,
+		TokenAccess: "ACCESS4",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	tks, err := TokenPair(db, TokenPairParams{
+		UserID:  id,
+		Invalid: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spew.Dump(tks)
+	got, want := len(tks), 3
+	if got != want {
+		t.Fatalf("expected %d valid tokens, got %d", want, got)
+	}
+
+	if err := DeleteExpired(db, &DeleteExpiredParams{
+		UserID:       id,
+		RefreshToken: "REFRESH1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	tks, err = TokenPair(db, TokenPairParams{
+		UserID:  id,
+		Invalid: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spew.Dump(tks)
+	got, want = len(tks), 2
+	if got != want {
+		t.Fatalf("expected %d valid tokens, got %d", want, got)
+	}
+
+	gotToken, wantToken := tks[0].AccessToken, "ACCESS2"
+	if gotToken != wantToken {
+		t.Fatalf("expected token %s, got %s", wantToken, gotToken)
+	}
+	gotToken, wantToken = tks[1].AccessToken, "ACCESS3"
+	if gotToken != wantToken {
+		t.Fatalf("expected token %s, got %s", wantToken, gotToken)
+	}
+	cleanupUserAndTokens()
 }

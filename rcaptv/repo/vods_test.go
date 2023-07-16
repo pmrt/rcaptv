@@ -8,7 +8,6 @@ import (
 )
 
 func TestLastVODByStreamer(t *testing.T) {
-	t.Parallel()
 	rows, err := LastVODByStreamer(db)
 	if err != nil {
 		t.Fatal(err)
@@ -71,9 +70,7 @@ func TestVodAfter(t *testing.T) {
 	}
 }
 
-
 func TestUpsertVods(t *testing.T) {
-	t.Parallel()
 	ts1, err := time.Parse(time.RFC3339, "2023-06-14T23:21:38Z")
 	if err != nil {
 		t.Fatal(err)
@@ -113,7 +110,7 @@ func TestUpsertVods(t *testing.T) {
 	UpsertVods(db, vods)
 	got, err := Vods(db, &VodsParams{
 		VideoIDs: []string{"18464727000", "1845909001"},
-		First: 2,
+		First:    2,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -165,7 +162,7 @@ func TestUpsertVods(t *testing.T) {
 	UpsertVods(db, vods2)
 	got, err = Vods(db, &VodsParams{
 		VideoIDs: []string{"18464727000", "1845909001"},
-		First: 2,
+		First:    2,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -190,7 +187,7 @@ func TestUpsertVods(t *testing.T) {
 func TestVodsExtend(t *testing.T) {
 	vods, err := Vods(db, &VodsParams{
 		VideoIDs: []string{"1847800606"},
-		Extend: 2,
+		Extend:   2,
 	})
 	if err != nil {
 		t.Fatal(err)

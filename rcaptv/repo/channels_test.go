@@ -7,7 +7,6 @@ import (
 )
 
 func TestTrackedChannels(t *testing.T) {
-	t.Parallel()
 	rows, err := Tracked(db)
 	if err != nil {
 		t.Fatal(err)
