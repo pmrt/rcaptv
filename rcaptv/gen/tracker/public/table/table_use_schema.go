@@ -12,6 +12,8 @@ package table
 func UseSchema(schema string) {
 	Clips = Clips.FromSchema(schema)
 	SchemaMigrations = SchemaMigrations.FromSchema(schema)
+	TokenPairs = TokenPairs.FromSchema(schema)
 	TrackedChannels = TrackedChannels.FromSchema(schema)
+	Users = Users.FromSchema(schema)
 	Vods = Vods.FromSchema(schema)
 }

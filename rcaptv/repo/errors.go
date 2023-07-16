@@ -2,4 +2,4 @@ package repo
 
 import "errors"
 
-var ErrNoRowsInserted = errors.New("no rows inserted")
+var ErrNoRowsAffected = errors.New("no rows affected")

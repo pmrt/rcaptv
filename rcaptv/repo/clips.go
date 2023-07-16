@@ -54,5 +54,5 @@ func UpsertClips(db *sql.DB, clips []*helix.Clip) error {
 	if n > 0 {
 		return nil
 	}
-	return ErrNoRowsInserted
+	return ErrNoRowsAffected
 }

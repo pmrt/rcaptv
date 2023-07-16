@@ -11,15 +11,15 @@ import (
 )
 
 type VodsParams struct {
-	VideoIDs []string
-	BcID string
+	VideoIDs   []string
+	BcID       string
 	BcUsername string
 	// If Extend > 0, Vods() will use `created_at` column of the last VOD
 	// obtained and append the `Extend` number of VODs following the `created_at`
 	// timestamp order. Extend won't work for Vods() querying by BcUsername, it's
 	// mostly useful for queries with a single videoID
 	Extend int
-	First int
+	First  int
 	// After returns the First rows after `after` videoID
 	After string
 }
@@ -48,7 +48,7 @@ func Vods(db *sql.DB, p *VodsParams) ([]*helix.VOD, error) {
 	}
 	if bid := p.BcID; bid != "" {
 		stmt = stmt.WHERE(
-		tbl.Vods.BcID.EQ(String(bid)),
+			tbl.Vods.BcID.EQ(String(bid)),
 		)
 	}
 	stmt = stmt.ORDER_BY(tbl.Vods.CreatedAt.DESC()).
@@ -79,11 +79,11 @@ func vodsAfter(db *sql.DB, lastVod *helix.VOD, limit int) (r []*helix.VOD, err e
 	stmt := SELECT(
 		tbl.Vods.AllColumns,
 	).FROM(tbl.Vods).
-	WHERE(
-		tbl.Vods.CreatedAt.LT(TimestampT(lastVod.CreatedAt)).
-	AND(
-		tbl.Vods.BcID.EQ(String(lastVod.BroadcasterID)),
-	)).ORDER_BY(tbl.Vods.CreatedAt.DESC()).LIMIT(int64(limit))
+		WHERE(
+			tbl.Vods.CreatedAt.LT(TimestampT(lastVod.CreatedAt)).
+				AND(
+					tbl.Vods.BcID.EQ(String(lastVod.BroadcasterID)),
+				)).ORDER_BY(tbl.Vods.CreatedAt.DESC()).LIMIT(int64(limit))
 	if err := stmt.Query(db, &r); err != nil {
 		return nil, err
 	}
@@ -141,9 +141,8 @@ func UpsertVods(db *sql.DB, vods []*helix.VOD) error {
 	if n > 0 {
 		return nil
 	}
-	return ErrNoRowsInserted
+	return ErrNoRowsAffected
 }
-
 
 type LastVOIDByStreamerResults struct {
 	BroadcasterID string `alias:"vods.bc_id"`
