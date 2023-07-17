@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+
 	cfg "pedro.to/rcaptv/config"
 	"pedro.to/rcaptv/database"
 	"pedro.to/rcaptv/helix"
@@ -70,9 +71,9 @@ func (t *Tracker) Run() error {
 	t.lastVIDByStreamer.FromDB(t.db)
 
 	l.Info().Msg("initializing scheduler")
-	bs := newBalancedSchedule(BalancedScheduleOpts{
-		CycleSize:          uint(t.TrackingCycleMinutes),
-		EstimatedStreamers: uint(lenbc),
+	bs := NewBalancedSchedule(BalancedScheduleOpts{
+		CycleSize:        uint(t.TrackingCycleMinutes),
+		EstimatedObjects: uint(lenbc),
 	})
 	for _, streamer := range streamers {
 		bs.Add(streamer.BcID)
@@ -80,7 +81,7 @@ func (t *Tracker) Run() error {
 	cs := bs.opts.CycleSize
 	l.Info().
 		Msgf("starting scheduler real-time tracking (cycle_size=%d, estimated_streamers=%d)",
-			cs, bs.opts.EstimatedStreamers,
+			cs, bs.opts.EstimatedObjects,
 		)
 	bs.Start()
 
@@ -89,7 +90,7 @@ func (t *Tracker) Run() error {
 		// For every scheduler tick we get the minute (or unit we're using) and the
 		// list of streamers to be invoked within that minute
 		case m := <-bs.RealTime():
-			for _, bid := range m.Streamers {
+			for _, bid := range m.Objects {
 				bid := bid
 				if !cfg.IsProd && t.FakeRun {
 					l.Warn().Msg("skipping run in FakeRun mode")
@@ -196,12 +197,12 @@ func (t *Tracker) FetchClips(bid string) ([]*helix.Clip, error) {
 	clips, err := t.hx.DeepClips(&helix.DeepClipsParams{
 		ClipsParams: &helix.ClipsParams{
 			BroadcasterID:            bid,
-			StartedAt: from,
-			EndedAt: now,
-			StopViewsThreshold: t.ClipViewThreshold,
+			StartedAt:                from,
+			EndedAt:                  now,
+			StopViewsThreshold:       t.ClipViewThreshold,
 			ViewsThresholdWindowSize: t.ClipViewWindowSize,
 		},
-		MaxDeepLvl:     t.ClipTrackingMaxDeepLevel,
+		MaxDeepLvl: t.ClipTrackingMaxDeepLevel,
 	})
 	if err != nil {
 		if errors.Is(err, helix.ErrItemsEmpty) {

@@ -3,6 +3,9 @@ package utils
 import (
 	"math"
 	"testing"
+
+	"github.com/davecgh/go-spew/spew"
+	"github.com/go-test/deep"
 )
 
 func TestPrependHash(t *testing.T) {
@@ -106,6 +109,44 @@ func TestMin(t *testing.T) {
 		want := test.want
 		if got != want {
 			t.Fatalf("wrong min, test#%d got:%d want:%d", i+1, got, want)
+		}
+	}
+}
+
+func TestRemoveKey(t *testing.T) {
+	tests := []struct {
+		input  []string
+		target string
+		want   []string
+	}{
+		{
+			input:  []string{"aa", "bb", "cc", "dd"},
+			target: "bb",
+			want:   []string{"aa", "cc", "dd"},
+		},
+		{
+			input:  []string{"aa", "bb", "cc", "dd"},
+			target: "aa",
+			want:   []string{"bb", "cc", "dd"},
+		},
+		{
+			input:  []string{"aa", "bb", "cc", "dd"},
+			target: "dd",
+			want:   []string{"aa", "bb", "cc"},
+		},
+	}
+
+	for _, test := range tests {
+		got := removeKey(test.input, test.target)
+		want := test.want
+		t.Logf("got:\n%s\n", spew.Sdump(got))
+		t.Logf("want:\n%s\n", spew.Sdump(want))
+		t.Logf("test.input:\n%s\n", spew.Sdump(test.input))
+		if diff := deep.Equal(got, want); diff != nil {
+			t.Fatal(diff)
+		}
+		if diff := deep.Equal(got, test.input); diff != nil {
+			t.Fatalf("input should be modified too (by reference): %s", diff)
 		}
 	}
 }

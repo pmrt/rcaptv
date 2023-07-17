@@ -29,7 +29,6 @@ func TestMain(m *testing.M) {
 	}
 
 	os.Exit(code)
-
 }
 
 func TestFetchVods(t *testing.T) {
