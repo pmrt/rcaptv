@@ -9,9 +9,11 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 	"golang.org/x/oauth2/twitch"
 	"pedro.to/rcaptv/utils"
@@ -23,6 +25,15 @@ const (
 	MB
 	GB
 )
+
+type CtxHelixKey string
+
+const CtxHelixTokenSource CtxHelixKey = "helix"
+
+func ContextWithTokenSource(tk *oauth2.Token, opts NotifyReuseTokenSourceOpts) context.Context {
+	src := NotifyReuseTokenSource(tk, opts)
+	return context.WithValue(context.Background(), CtxHelixTokenSource, src)
+}
 
 const EstimatedSubscriptionJSONSize = 350
 
@@ -41,6 +52,7 @@ var (
 	ErrItemsEmpty             = errors.New("no items returned")
 	ErrBadRequest             = errors.New("bad request")
 	ErrNotFound               = errors.New("not found")
+	ErrInvalidContext         = errors.New("invalid context for current request")
 )
 
 type HttpResponse struct {
@@ -54,6 +66,29 @@ type ClientCreds struct {
 
 type Pagination struct {
 	Cursor string
+}
+
+type RFC3339Timestamp time.Time
+
+func (ts *RFC3339Timestamp) UnmarshalJSON(b []byte) error {
+	value := strings.Trim(string(b), `"`)
+	if value == "" {
+		return nil
+	}
+	if value == "null" {
+		return nil
+	}
+
+	t, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return err
+	}
+	*ts = RFC3339Timestamp(t)
+	return nil
+}
+
+func (ts *RFC3339Timestamp) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + time.Time(*ts).Format(time.RFC3339) + `"`), nil
 }
 
 // modReqQuery provides a way to easily edit a particular parameter in a `req`
@@ -88,9 +123,11 @@ type HelixOpts struct {
 // Helix is safe for concurrent access if opts are never mutated after
 // initialization
 type Helix struct {
-	ctx  context.Context
-	opts *HelixOpts
-	c    *http.Client
+	ctx           context.Context
+	opts          *HelixOpts
+	defaultClient *http.Client
+
+	useUserTokens bool
 }
 
 // ClientID returns the client id which the helix client was initializated
@@ -229,7 +266,17 @@ func (hx *Helix) doAtMost(req *http.Request, attemptsLeft int) (*HttpResponse, e
 	l.Info().Msgf("%s: %s %s (attempts:%d)",
 		req.Method, req.URL.Path, req.URL.RawQuery, attempts,
 	)
-	resp, err := hx.c.Do(req)
+
+	c := hx.defaultClient
+	if hx.useUserTokens {
+		ts, ok := req.Context().Value(CtxHelixTokenSource).(oauth2.TokenSource)
+		if !ok {
+			l.Err(ErrInvalidContext).Msg("invalid context")
+			return nil, ErrInvalidContext
+		}
+		c = oauth2.NewClient(context.Background(), ts)
+	}
+	resp, err := c.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -334,21 +381,23 @@ func (hx *Helix) Exchange() {
 		ClientSecret: hx.ClientSecret(),
 		TokenURL:     twitch.Endpoint.TokenURL,
 	}
-	hx.c = o2.Client(hx.ctx)
+	hx.defaultClient = o2.Client(hx.ctx)
 }
 
 // NewWithoutExchange instantiates a new Helix client but without exchanging
-// credentials for a token source. Useful for testing.
+// credentials for a token source. Useful for testing or when using user tokens
+// instead of app tokens (oauth tokens that are retrieved from cookies)
 //
-// Use New() if your helix client will use authenticated endpoints.
+// Use New() if your helix client will use authenticated endpoints with app
+// tokens and NewWithUserTokens() if your will use user tokens instead.
 func NewWithoutExchange(opts *HelixOpts, c ...*http.Client) *Helix {
 	hx := &Helix{
-		opts: opts,
-		c:    http.DefaultClient,
-		ctx:  context.Background(),
+		opts:          opts,
+		defaultClient: http.DefaultClient,
+		ctx:           context.Background(),
 	}
 	if len(c) == 1 {
-		hx.c = c[0]
+		hx.defaultClient = c[0]
 	}
 	if hx.opts.HandleStreamOnline == nil {
 		hx.opts.HandleStreamOnline = func(evt *EventStreamOnline) {}
@@ -377,5 +426,11 @@ func Deduplicate[T any](s []T, keyFn func(i T) string) []T {
 func New(opts *HelixOpts) *Helix {
 	hx := NewWithoutExchange(opts)
 	hx.Exchange()
+	return hx
+}
+
+func NewWithUserTokens(opts *HelixOpts) *Helix {
+	hx := NewWithoutExchange(opts)
+	hx.useUserTokens = true
 	return hx
 }

@@ -53,7 +53,7 @@ func main() {
 			ClientID:     cfg.HelixClientID,
 			ClientSecret: cfg.HelixClientSecret,
 		},
-		APIUrl:           cfg.APIUrl,
+		APIUrl:           cfg.TwitchAPIUrl,
 		EventsubEndpoint: cfg.EventSubEndpoint,
 	})
 

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
 	"pedro.to/rcaptv/database"
 	pg "pedro.to/rcaptv/database/postgres"
 )
@@ -17,21 +16,36 @@ func SetupPostgres() (*sql.DB, *dockertest.Pool, *dockertest.Resource) {
 	// Run a docker with a database for testing
 	pool, err := dockertest.NewPool("")
 	if err != nil {
-		panic(err)
+		log.Fatalf("Could not construct pool: %s", err)
 	}
-	res, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "postgres",
-		Tag:        "14.3-alpine3.16",
-		Env: []string{
+
+	err = pool.Client.Ping()
+	if err != nil {
+		log.Fatalf("Could not connect to docker. %s", err)
+	}
+
+	res, err := pool.Run(
+		"postgres",
+		"latest",
+		[]string{
 			"POSTGRES_PASSWORD=test",
 			"POSTGRES_USER=user",
 			"POSTGRES_DB=name",
 			"listen_addresses = '*'",
-		},
-	}, func(hc *docker.HostConfig) {
-		hc.AutoRemove = true
-		hc.RestartPolicy = docker.RestartPolicy{Name: "no"}
-	})
+		})
+	// res, err := pool.RunWithOptions(&dockertest.RunOptions{
+	// 	Repository: "postgres",
+	// 	Tag:        "14.3-alpine3.16",
+	// 	Env: []string{
+	// 		"POSTGRES_PASSWORD=test",
+	// 		"POSTGRES_USER=user",
+	// 		"POSTGRES_DB=name",
+	// 		"listen_addresses = '*'",
+	// 	},
+	// }, func(hc *docker.HostConfig) {
+	// 	hc.AutoRemove = true
+	// 	hc.RestartPolicy = docker.RestartPolicy{Name: "no"}
+	// })
 	if err != nil {
 		var opErr *net.OpError
 		if errors.As(err, &opErr) {
@@ -39,7 +53,7 @@ func SetupPostgres() (*sql.DB, *dockertest.Pool, *dockertest.Resource) {
 		}
 		panic(err)
 	}
-	res.Expire(120)
+	res.Expire(200)
 
 	// Prepare a connection to the db in the docker
 	sto := database.New(
@@ -52,10 +66,10 @@ func SetupPostgres() (*sql.DB, *dockertest.Pool, *dockertest.Resource) {
 			StorageMaxIdleConns:    5,
 			StorageMaxOpenConns:    10,
 			StorageConnMaxLifetime: time.Hour,
-			StorageConnTimeout:     60 * time.Second,
+			StorageConnTimeout:     20 * time.Second,
 			DebugMode:              true,
 
-			MigrationVersion: 1,
+			MigrationVersion: 2,
 			MigrationPath:    "../database/postgres/migrations",
 		}))
 	db := sto.Conn()

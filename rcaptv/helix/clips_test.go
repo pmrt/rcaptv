@@ -26,7 +26,7 @@ func TestHelixClip(t *testing.T) {
 		opts: &HelixOpts{
 			APIUrl: sv.URL,
 		},
-		c: sv.Client(),
+		defaultClient: sv.Client(),
 	}
 	clipsResp, err := hx.Clips(&ClipsParams{
 		BroadcasterID:            "58753574",
@@ -82,7 +82,7 @@ func TestHelixClipEmpty(t *testing.T) {
 		opts: &HelixOpts{
 			APIUrl: sv.URL,
 		},
-		c: sv.Client(),
+		defaultClient: sv.Client(),
 	}
 	clipsResp, err := hx.Clips(&ClipsParams{
 		BroadcasterID:            "58753574",
@@ -247,10 +247,10 @@ func TestDeepFetchClips(t *testing.T) {
 
 	clips, err := hx.DeepClips(&DeepClipsParams{
 		ClipsParams: &ClipsParams{
-			BroadcasterID: "58753574",
-			StartedAt: startA,
-			EndedAt: endA,
-			StopViewsThreshold: 8,
+			BroadcasterID:            "58753574",
+			StartedAt:                startA,
+			EndedAt:                  endA,
+			StopViewsThreshold:       8,
 			ViewsThresholdWindowSize: 3,
 		},
 		MaxDeepLvl: 3,
@@ -355,10 +355,10 @@ func TestDeepFetchClipsEmptyClips(t *testing.T) {
 	}, sv.Client())
 	clips, err := hx.DeepClips(&DeepClipsParams{
 		ClipsParams: &ClipsParams{
-			BroadcasterID: "58753574",
-			StartedAt: startA,
-			EndedAt: endA,
-			StopViewsThreshold: 8,
+			BroadcasterID:            "58753574",
+			StartedAt:                startA,
+			EndedAt:                  endA,
+			StopViewsThreshold:       8,
 			ViewsThresholdWindowSize: 3,
 		},
 		MaxDeepLvl: 3,

@@ -64,7 +64,7 @@ func TestHelixVOD(t *testing.T) {
 		opts: &HelixOpts{
 			APIUrl: sv.URL,
 		},
-		c: sv.Client(),
+		defaultClient: sv.Client(),
 	}
 	vods, err := hx.Vods(&VODParams{
 		BroadcasterID: "58753574",
@@ -171,7 +171,7 @@ func TestHelixVODEmpty(t *testing.T) {
 		opts: &HelixOpts{
 			APIUrl: sv.URL,
 		},
-		c: sv.Client(),
+		defaultClient: sv.Client(),
 	}
 	vods, err := hx.Vods(&VODParams{
 		BroadcasterID: "58753574",
@@ -208,7 +208,7 @@ func TestHelixVODOnlyMostRecent(t *testing.T) {
 		opts: &HelixOpts{
 			APIUrl: sv.URL,
 		},
-		c: sv.Client(),
+		defaultClient: sv.Client(),
 	}
 	vods, err := hx.Vods(&VODParams{
 		BroadcasterID:  "58753574",

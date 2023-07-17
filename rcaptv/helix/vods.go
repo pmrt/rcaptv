@@ -1,6 +1,7 @@
 package helix
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -31,6 +32,8 @@ type VODParams struct {
 	First          int
 	StopAtVODID    string
 	OnlyMostRecent bool
+
+	Context context.Context
 }
 
 type VOD struct {
@@ -107,11 +110,16 @@ func (hx *Helix) Vods(p *VODParams) ([]*VOD, error) {
 	}
 	params.Add("first", strconv.Itoa(p.First))
 	params.Add("type", "archive")
+
+	if p.Context == nil {
+		p.Context = context.Background()
+	}
 	req, err := http.NewRequest(
 		"GET",
 		fmt.Sprintf("%s/videos?%s", hx.APIUrl(), params.Encode()),
 		nil,
 	)
+	req = req.WithContext(p.Context)
 	if err != nil {
 		return nil, err
 	}

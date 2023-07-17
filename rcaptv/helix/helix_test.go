@@ -13,6 +13,34 @@ import (
 	"github.com/go-test/deep"
 )
 
+func TestRFC3339Timestamp(t *testing.T) {
+	type testing struct {
+		CreatedAt time.Time `json:"created_at"`
+	}
+	input := []byte(`{"created_at":"2021-04-17T17:23:52Z"}`)
+	var ts *testing
+	if err := json.Unmarshal(input, &ts); err != nil {
+		t.Fatal(err)
+	}
+
+	want, err := time.Parse(time.RFC3339, "2021-04-17T17:23:52Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if ts.CreatedAt != want {
+		t.Fatalf("got %v, want %v", ts.CreatedAt, want)
+	}
+
+	res, err := json.Marshal(ts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := deep.Equal(input, res); diff != nil {
+		t.Fatalf("got %v, want %v", res, input)
+	}
+}
+
 func TestDeduplicate(t *testing.T) {
 	t.Parallel()
 	duplicated := []*Clip{
@@ -189,11 +217,11 @@ func TestHelixCredentials(t *testing.T) {
 			ClientID:     cid,
 			ClientSecret: cs,
 		},
-		APIUrl:           os.Getenv("API_URL"),
+		APIUrl:           os.Getenv("TWITCH_API_URL"),
 		EventsubEndpoint: "/eventsub",
 	})
 
-	if hx.c == nil {
+	if hx.defaultClient == nil {
 		t.Fatal("client is empty")
 	}
 
@@ -204,7 +232,7 @@ func TestHelixCredentials(t *testing.T) {
 	}
 	req.Header.Set("Client-Id", hx.ClientID())
 
-	resp, err := hx.c.Do(req)
+	resp, err := hx.defaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +296,7 @@ func TestHelixCreateEventsubSubscription(t *testing.T) {
 			APIUrl:           sv.URL,
 			EventsubEndpoint: "/eventsub",
 		},
-		c: sv.Client(),
+		defaultClient: sv.Client(),
 	}
 	err := hx.CreateEventsubSubscription(&Subscription{
 		Type:    SubStreamOnline,
@@ -333,7 +361,7 @@ func TestHelixRateLimitedResiliency(t *testing.T) {
 			APIUrl:           sv.URL,
 			EventsubEndpoint: "/eventsub",
 		},
-		c: sv.Client(),
+		defaultClient: sv.Client(),
 	}
 
 	start := time.Now()
@@ -396,7 +424,7 @@ func TestHelixPagination(t *testing.T) {
 		opts: &HelixOpts{
 			APIUrl: sv.URL,
 		},
-		c: sv.Client(),
+		defaultClient: sv.Client(),
 	}
 	clipsResp, err := hx.Clips(&ClipsParams{
 		BroadcasterID:            "58753574",
@@ -477,7 +505,7 @@ func TestHelixiDeduplicatedPagination(t *testing.T) {
 		opts: &HelixOpts{
 			APIUrl: sv.URL,
 		},
-		c: sv.Client(),
+		defaultClient: sv.Client(),
 	}
 	clipsResp, err := hx.Clips(&ClipsParams{
 		BroadcasterID:            "58753574",

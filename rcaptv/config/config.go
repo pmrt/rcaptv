@@ -17,10 +17,10 @@ const LastMigrationVersion = 1
 var loaded = false
 
 var (
-	TrackerPostgresUser                   string
-	TrackerPostgresPassword               string
-	RcaptvPostgresUser                    string
-	RcaptvPostgresPassword                string
+	TrackerPostgresUser     string
+	TrackerPostgresPassword string
+	RcaptvPostgresUser      string
+	RcaptvPostgresPassword  string
 
 	PostgresHost                   string
 	PostgresPort                   string
@@ -40,13 +40,17 @@ var (
 
 	SkipMigrations bool
 
-	APIUrl           string
-	APIPort          string
-	EventSubEndpoint string
-	RateLimitMaxConns int
-	RateLimitExpSeconds int
+	Domain                  string
+	BaseURL                 string
+	AuthEndpoint            string
+	AuthRedirectEndpoint    string
+	CookieSecret            string
+	TwitchAPIUrl            string
+	APIPort                 string
+	EventSubEndpoint        string
+	RateLimitMaxConns       int
+	RateLimitExpSeconds     int
 	ClipsMaxPeriodDiffHours int
-
 
 	TrackingCycleMinutes     int
 	ClipTrackingWindowHours  int
@@ -156,8 +160,13 @@ func LoadVars() {
 
 	SkipMigrations = Env("SKIP_MIGRATIONS", false)
 
+	Domain = Env("DOMAIN", "localhost")
+	BaseURL = Env("BASE_URL", "http://localhost")
 	APIPort = Env("API_PORT", "8080")
-	APIUrl = Env("API_URL", "https://api.twitch.tv/helix")
+	AuthEndpoint = Env("AUTH_ENDPOINT", "/auth")
+	AuthRedirectEndpoint = Env("AUTH_REDIRECT_ENDPOINT", "/auth/redirect")
+	CookieSecret = Env("COOKIE_SECRET", "unsafe_secret")
+	TwitchAPIUrl = Env("TWITCH_API_URL", "https://api.twitch.tv/helix")
 	EventSubEndpoint = Env("EVENTSUB_ENDPOINT", "/eventsub")
 	RateLimitMaxConns = Env("RATE_LIMIT_MAX_CONNS", 20)
 	RateLimitExpSeconds = Env("RATE_LIMIT_EXP_SECONDS", 60)
@@ -177,7 +186,7 @@ func LoadVars() {
 }
 
 func Setup() {
-	if (loaded) {
+	if loaded {
 		return
 	}
 	logger.SetupLogger()

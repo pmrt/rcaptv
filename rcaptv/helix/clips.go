@@ -1,6 +1,7 @@
 package helix
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"net/http"
@@ -27,6 +28,8 @@ type ClipsParams struct {
 	StopViewsThreshold int
 	// Number of clips used to determine the threshold in a rolling window
 	ViewsThresholdWindowSize int
+
+	Context context.Context
 }
 
 type Clip struct {
@@ -77,6 +80,9 @@ func (hx *Helix) Clips(p *ClipsParams) (*ClipResponse, error) {
 	}
 	params.Add("first", strconv.Itoa(p.First))
 
+	if p.Context == nil {
+		p.Context = context.Background()
+	}
 	req, err := http.NewRequest(
 		"GET",
 		fmt.Sprintf("%s/clips?%s", hx.APIUrl(), params.Encode()),
@@ -85,6 +91,7 @@ func (hx *Helix) Clips(p *ClipsParams) (*ClipResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+	req = req.WithContext(p.Context)
 
 	if p.ViewsThresholdWindowSize == 0 {
 		p.ViewsThresholdWindowSize = 4
@@ -159,6 +166,7 @@ func (hx *Helix) deepFetchClips(p DeepClipsParams, lvl int, from time.Time, to t
 		BroadcasterID:            p.BroadcasterID,
 		StopViewsThreshold:       p.StopViewsThreshold,
 		ViewsThresholdWindowSize: p.ViewsThresholdWindowSize,
+		Context:                  p.Context,
 		StartedAt:                from,
 		EndedAt:                  to,
 	})

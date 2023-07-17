@@ -5,10 +5,13 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/encryptcookie"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
+	"github.com/gofiber/template/handlebars/v2"
 	"github.com/rs/zerolog/log"
 	"pedro.to/rcaptv/api"
 	cfg "pedro.to/rcaptv/config"
+	"pedro.to/rcaptv/cookie"
 	"pedro.to/rcaptv/database"
 	"pedro.to/rcaptv/database/postgres"
 	"pedro.to/rcaptv/helix"
@@ -39,15 +42,19 @@ func main() {
 
 			MigrationVersion: cfg.PostgresMigVersion,
 			MigrationPath:    cfg.PostgresMigPath,
-	}))
+		}))
+
+	l.Info().Msg("loading views")
+	engine := handlebars.New("./views", ".hbs")
 
 	app := fiber.New(fiber.Config{
-		ReadTimeout: 10 * time.Second,
-		WriteTimeout: 20 * time.Second,
-		ReadBufferSize: 4096,
+		ReadTimeout:     10 * time.Second,
+		WriteTimeout:    20 * time.Second,
+		ReadBufferSize:  4096,
 		WriteBufferSize: 4096,
-		BodyLimit: 4 * 1024 * 1024,
-		Concurrency: 256*1024,
+		BodyLimit:       4 * 1024 * 1024,
+		Concurrency:     256 * 1024,
+		Views:           engine,
 	})
 	if cfg.IsProd {
 		// in-memory ratelimiter for production. Use redis if needed in the future
@@ -56,8 +63,8 @@ func main() {
 			Next: func(c *fiber.Ctx) bool {
 				return c.IP() == "127.0.0.1"
 			},
-			Max: cfg.RateLimitMaxConns,
-			Expiration: time.Duration(cfg.RateLimitExpSeconds) * time.Second,
+			Max:               cfg.RateLimitMaxConns,
+			Expiration:        time.Duration(cfg.RateLimitExpSeconds) * time.Second,
 			LimiterMiddleware: limiter.SlidingWindow{},
 			LimitReached: func(c *fiber.Ctx) error {
 				l.Warn().Msgf("ratelimit reached (%s)", c.IP())
@@ -74,6 +81,10 @@ func main() {
 			return c.Next()
 		})
 	}
+	app.Use(encryptcookie.New(encryptcookie.Config{
+		Key:    cfg.CookieSecret,
+		Except: []string{"csrf_", cookie.UserCookie},
+	}))
 	app.Use(logger.Fiber())
 
 	hx := helix.New(&helix.HelixOpts{
@@ -81,26 +92,31 @@ func main() {
 			ClientID:     cfg.HelixClientID,
 			ClientSecret: cfg.HelixClientSecret,
 		},
-		APIUrl:           cfg.APIUrl,
+		APIUrl:           cfg.TwitchAPIUrl,
 		EventsubEndpoint: cfg.EventSubEndpoint,
 	})
-	api := api.New(api.APIOpts{
-		Helix: hx,
-		Storage: sto,
+	rcapApi := api.New(api.APIOpts{
+		Helix:                   hx,
+		Storage:                 sto,
 		ClipsMaxPeriodDiffHours: cfg.ClipsMaxPeriodDiffHours,
-})
+	})
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.Status(http.StatusOK).Send([]byte("ok"))
 	})
+
+	app.Get("/login", rcapApi.Login)
+	auth := app.Group(cfg.AuthEndpoint)
+	auth.Get(cfg.AuthRedirectEndpoint, rcapApi.Callback)
+
 	v1 := app.Group("/v1")
-	v1.Get("/vods", api.Vods)
-	v1.Get("/clips", api.Clips)
+	v1.Get("/vods", rcapApi.Vods)
+	v1.Get("/clips", rcapApi.Clips)
 
 	go func() {
 		l.Info().Msgf("rcaptv server listening on port:%s", cfg.APIPort)
-	 if err := app.Listen(":"+cfg.APIPort); err != nil {
-		 l.Panic().Err(err).Msg("rcaptv server returned an error")
-	 }
+		if err := app.Listen(":" + cfg.APIPort); err != nil {
+			l.Panic().Err(err).Msg("rcaptv server returned an error")
+		}
 	}()
 	sig := utils.WaitInterrupt()
 	l.Info().Msgf("termination signal received [%s]. Attempting gracefully shutdown...", sig)

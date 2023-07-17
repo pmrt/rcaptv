@@ -20,6 +20,13 @@ type TokenPairParams struct {
 	Invalid bool
 }
 
+// TokenPair returns the corresponding oauth2.Token objects in the database for
+// the required UserID parameter. If an optional AccessToken parameter is
+// given, it will try to find the given access token for the given userID
+// returning an empty slice otherwise.
+//
+// By default TokenPair filters out non-expired tokens. If Invalid is true, it
+// also will include expired tokens.
 func TokenPair(db *sql.DB, p TokenPairParams) ([]*oauth2.Token, error) {
 	if p.UserID == 0 {
 		return []*oauth2.Token{}, errors.New("repo.TokenPair: missing user id")
@@ -55,6 +62,25 @@ func TokenPair(db *sql.DB, p TokenPairParams) ([]*oauth2.Token, error) {
 	return tks, err
 }
 
+// ValidTokens returns whether the given access token for the provided userId
+// is found on the database and it is not expired
+func ValidToken(db *sql.DB, userID int64, accessToken string) bool {
+	tks, err := TokenPair(db, TokenPairParams{
+		UserID:      userID,
+		AccessToken: accessToken,
+	})
+	if err != nil {
+		return false
+	}
+	if len(tks) == 0 {
+		return false
+	}
+	return tks[0].AccessToken == accessToken
+}
+
+// UpserTokenPair takes an userID and a given oauth2.Token, if the refresh
+// tokens exists for the userID it will update the access token and the expiry,
+// otherwise it will insert a new token pair
 func UpsertTokenPair(db *sql.DB, userID int64, t *oauth2.Token) error {
 	stmt := tbl.TokenPairs.INSERT(
 		tbl.TokenPairs.UserID, tbl.TokenPairs.AccessToken, tbl.TokenPairs.RefreshToken,
@@ -87,6 +113,8 @@ type DeleteExpiredParams struct {
 	RefreshToken string
 }
 
+// DeleteExpired deletes expired tokens matching the provided parameters. If a
+// nil parameter object is passed, all expired tokens will be deleted.
 func DeleteExpired(db *sql.DB, p *DeleteExpiredParams) error {
 	nowPlus10s := time.Now().Add(10 * time.Second)
 	stmt := tbl.TokenPairs.DELETE()
