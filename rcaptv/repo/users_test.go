@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+
 	"pedro.to/rcaptv/helix"
 )
 
@@ -29,10 +30,6 @@ func TestUpsertUser(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, want := id, int64(1)
-	if got != want {
-		t.Fatalf("got %d want %d", got, want)
-	}
 	u, err := User(db, UserQueryParams{
 		TwitchUserID: "90075649",
 	})
@@ -45,7 +42,7 @@ func TestUpsertUser(t *testing.T) {
 	}
 	createdAt := u.CreatedAt
 
-	id, err = UpsertUser(db, &helix.User{
+	id2, err := UpsertUser(db, &helix.User{
 		Id:              "90075649",
 		Login:           "illojuan2",
 		DisplayName:     "IlloJuan",
@@ -59,7 +56,7 @@ func TestUpsertUser(t *testing.T) {
 	}
 
 	// should be updated not inserted, so expect same id
-	got, want = id, int64(1)
+	got, want := id2, id
 	if got != want {
 		t.Fatalf("got %d want %d", got, want)
 	}

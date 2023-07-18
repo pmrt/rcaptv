@@ -8,11 +8,14 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	l "github.com/rs/zerolog/log"
+
 	"pedro.to/rcaptv/logger"
 )
 
-const Version = "0.1.7"
-const LastMigrationVersion = 1
+const (
+	Version              = "0.2.0"
+	LastMigrationVersion = 1
+)
 
 var loaded = false
 
@@ -42,8 +45,14 @@ var (
 
 	Domain                  string
 	BaseURL                 string
+	HealthEndpoint          string
+	LoginEndpoint           string
 	AuthEndpoint            string
 	AuthRedirectEndpoint    string
+	APIEndpoint             string
+	APIValidateEndpoint     string
+	APIVodsEndpoint         string
+	APIClipsEndpoint        string
 	CookieSecret            string
 	TwitchAPIUrl            string
 	APIPort                 string
@@ -57,6 +66,8 @@ var (
 	ClipTrackingMaxDeepLevel int
 	ClipViewThreshold        int
 	ClipViewWindowSize       int
+
+	EstimatedActiveUsers int
 
 	TrackIntervalMinutes int
 
@@ -163,6 +174,12 @@ func LoadVars() {
 	Domain = Env("DOMAIN", "localhost")
 	BaseURL = Env("BASE_URL", "http://localhost")
 	APIPort = Env("API_PORT", "8080")
+	HealthEndpoint = Env("HEALTH_ENDPOINT", "/health")
+	LoginEndpoint = Env("LOGIN_ENDPOINT", "/login")
+	APIEndpoint = Env("API_ENDPOINT", "/api/v1")
+	APIValidateEndpoint = Env("API_VALIDATE_ENDPOINT", "/validate")
+	APIVodsEndpoint = Env("API_VODS_ENDPOINT", "/vods")
+	APIClipsEndpoint = Env("API_CLIPS_ENDPOINT", "/clips")
 	AuthEndpoint = Env("AUTH_ENDPOINT", "/auth")
 	AuthRedirectEndpoint = Env("AUTH_REDIRECT_ENDPOINT", "/auth/redirect")
 	CookieSecret = Env("COOKIE_SECRET", "unsafe_secret")
@@ -177,6 +194,8 @@ func LoadVars() {
 	ClipTrackingMaxDeepLevel = Env("CLIP_TRACKING_MAX_DEEP_LEVEL", 2)
 	ClipViewThreshold = Env("CLIP_VIEW_THRESHOLD", 10)
 	ClipViewWindowSize = Env("CLIP_VIEW_WINDOW_SIZE", 4)
+
+	EstimatedActiveUsers = Env("ESTIMATED_ACTIVE_USERS", 200)
 
 	Debug = Env("DEBUG", false)
 	logger.SetLevel(Env("LOG_LEVEL", int8(zerolog.InfoLevel)))

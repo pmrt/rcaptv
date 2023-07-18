@@ -6,6 +6,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"golang.org/x/oauth2"
+
 	"pedro.to/rcaptv/helix"
 )
 
@@ -275,7 +276,7 @@ func TestDeleteExpired(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := DeleteExpired(db, nil); err != nil {
+	if err := DeleteToken(db, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -356,9 +357,9 @@ func TestDeleteExpiredSingle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := DeleteExpired(db, &DeleteExpiredParams{
+	if err := DeleteToken(db, &DeleteTokenParams{
 		UserID:      id,
-		TokenAccess: "ACCESS4",
+		AccessToken: "ACCESS4",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -376,7 +377,7 @@ func TestDeleteExpiredSingle(t *testing.T) {
 		t.Fatalf("expected %d valid tokens, got %d", want, got)
 	}
 
-	if err := DeleteExpired(db, &DeleteExpiredParams{
+	if err := DeleteToken(db, &DeleteTokenParams{
 		UserID:       id,
 		RefreshToken: "REFRESH1",
 	}); err != nil {
@@ -401,6 +402,89 @@ func TestDeleteExpiredSingle(t *testing.T) {
 		t.Fatalf("expected token %s, got %s", wantToken, gotToken)
 	}
 	gotToken, wantToken = tks[1].AccessToken, "ACCESS3"
+	if gotToken != wantToken {
+		t.Fatalf("expected token %s, got %s", wantToken, gotToken)
+	}
+	cleanupUserAndTokens()
+}
+
+func TestDeleteValid(t *testing.T) {
+	twitchCreatedAt, err := time.Parse(time.RFC3339, "2015-05-02T17:47:43Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := UpsertUser(db, &helix.User{
+		Id:              "90075649",
+		Login:           "illojuan",
+		DisplayName:     "IlloJuan",
+		Email:           "test@email.com",
+		ProfileImageURL: "https://static-cdn.jtvnw.net/jtv_user_pictures/37454f0e-581b-42ba-b95b-416f3113fd37-profile_image-300x300.png",
+		BroadcasterType: "partner",
+		CreatedAt:       helix.RFC3339Timestamp(twitchCreatedAt),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 1 valid token + 1 invalid token
+	if err = UpsertTokenPair(db, id, &oauth2.Token{
+		AccessToken:  "ACCESS1",
+		RefreshToken: "REFRESH1",
+		Expiry:       time.Now().Add(4 * time.Hour),
+		TokenType:    "Bearer",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err = UpsertTokenPair(db, id, &oauth2.Token{
+		AccessToken:  "ACCESS2",
+		RefreshToken: "REFRESH2",
+		Expiry:       time.Now(),
+		TokenType:    "Bearer",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := DeleteToken(db, &DeleteTokenParams{
+		UserID:      id,
+		AccessToken: "ACCESS1",
+	}); err != nil && err != ErrNoRowsAffected {
+		t.Fatal(err)
+	}
+
+	tks, err := TokenPair(db, TokenPairParams{
+		UserID:  id,
+		Invalid: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spew.Dump(tks)
+	got, want := len(tks), 2
+	if got != want {
+		t.Fatalf("expected %d valid tokens, got %d. Valid token should not be deleted with DeleteUnexpired=false", want, got)
+	}
+
+	if err := DeleteToken(db, &DeleteTokenParams{
+		UserID:          id,
+		AccessToken:     "ACCESS1",
+		DeleteUnexpired: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	tks, err = TokenPair(db, TokenPairParams{
+		UserID:  id,
+		Invalid: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spew.Dump(tks)
+	got, want = len(tks), 1
+	if got != want {
+		t.Fatalf("expected %d valid tokens, got %d. Valid token should be deleted with DeleteUnexpired=true", want, got)
+	}
+
+	gotToken, wantToken := tks[0].AccessToken, "ACCESS2"
 	if gotToken != wantToken {
 		t.Fatalf("expected token %s, got %s", wantToken, gotToken)
 	}

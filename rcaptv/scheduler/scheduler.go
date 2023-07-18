@@ -1,6 +1,7 @@
-package tracker
+package scheduler
 
 import (
+	"strconv"
 	"sync"
 	"time"
 
@@ -73,6 +74,10 @@ func StrategyMurmur(max uint32) *MurmurBalance {
 
 type Minute uint
 
+func (m Minute) String() string {
+	return strconv.FormatUint(uint64(m), 10)
+}
+
 const ResetMinute = Minute(0)
 
 type BalancedScheduleOpts struct {
@@ -112,22 +117,35 @@ type RealTimeMinute struct {
 	Objects []string
 }
 
+type (
+	ScheduleMap    map[Minute][]string
+	KeyToMinuteMap map[string]Minute
+)
+
 // Schedule is a guarded schedule map, safe for concurrent access
 type Schedule struct {
 	mu       sync.Mutex
-	schedule map[Minute][]string
+	schedule ScheduleMap
+	// denormalize. More memory required, O(1) Add operations
+	keyToMin KeyToMinuteMap
 }
 
 func (s *Schedule) Add(min Minute, key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.schedule[min] = append(s.schedule[min], key)
+	// O(1)
+	if _, found := s.keyToMin[key]; !found {
+		s.schedule[min] = append(s.schedule[min], key)
+		s.keyToMin[key] = min
+	}
 }
 
 func (s *Schedule) Remove(min Minute, key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// O(n); n = len(s.schedule[min])
 	s.schedule[min] = utils.RemoveKey(s.schedule[min], key)
+	delete(s.keyToMin, key)
 }
 
 func (s *Schedule) Pick(min Minute) []string {
@@ -151,6 +169,7 @@ type BalancedSchedule struct {
 	opts BalancedScheduleOpts
 }
 
+// Add adds the key element to the schedule if it is not already in it
 func (bs *BalancedSchedule) Add(key string) {
 	min := bs.BalancedMin(key)
 	bs.internal.Add(min, key)
@@ -178,6 +197,14 @@ func (bs *BalancedSchedule) RealTime() <-chan RealTimeMinute {
 	return bs.realTime
 }
 
+func (bs *BalancedSchedule) CycleSize() uint {
+	return bs.opts.CycleSize
+}
+
+func (bs *BalancedSchedule) EstimatedObjects() uint {
+	return bs.opts.EstimatedObjects
+}
+
 // Starts real-time scheduler.
 //
 // Every minute (or bs.opts.Freq), the bs.RealTime() channel will receive a
@@ -191,6 +218,8 @@ func (bs *BalancedSchedule) Start() {
 		max := Minute(bs.opts.CycleSize - 1)
 		d := bs.opts.Freq
 
+		// wait for the first one too. It's just easier to test
+		time.Sleep(d)
 		for {
 			if bs == nil {
 				return
@@ -214,7 +243,7 @@ func (bs *BalancedSchedule) Cancel() {
 	bs.cancelRealTime <- struct{}{}
 }
 
-func NewBalancedSchedule(opts BalancedScheduleOpts) *BalancedSchedule {
+func New(opts BalancedScheduleOpts) *BalancedSchedule {
 	if opts.CycleSize == 0 {
 		// prevent zero division in runtime
 		panic("CycleSize must be greater than 0")
@@ -232,7 +261,7 @@ func NewBalancedSchedule(opts BalancedScheduleOpts) *BalancedSchedule {
 		opts.Freq = time.Minute
 	}
 
-	pre := make(map[Minute][]string, opts.CycleSize)
+	pre := make(ScheduleMap, opts.CycleSize)
 	// preallocate strings slices
 	for min := range pre {
 		pre[min] = make([]string, 0, opts.EstimatedObjects/opts.CycleSize)
@@ -241,6 +270,7 @@ func NewBalancedSchedule(opts BalancedScheduleOpts) *BalancedSchedule {
 		opts: opts,
 		internal: Schedule{
 			schedule: pre,
+			keyToMin: make(KeyToMinuteMap),
 		},
 	}
 	bs.realTime = make(chan RealTimeMinute)

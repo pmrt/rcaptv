@@ -13,6 +13,7 @@ import (
 	"pedro.to/rcaptv/database"
 	"pedro.to/rcaptv/helix"
 	"pedro.to/rcaptv/repo"
+	"pedro.to/rcaptv/scheduler"
 )
 
 var (
@@ -71,17 +72,17 @@ func (t *Tracker) Run() error {
 	t.lastVIDByStreamer.FromDB(t.db)
 
 	l.Info().Msg("initializing scheduler")
-	bs := NewBalancedSchedule(BalancedScheduleOpts{
+	bs := scheduler.New(scheduler.BalancedScheduleOpts{
 		CycleSize:        uint(t.TrackingCycleMinutes),
 		EstimatedObjects: uint(lenbc),
 	})
 	for _, streamer := range streamers {
 		bs.Add(streamer.BcID)
 	}
-	cs := bs.opts.CycleSize
+	cs := bs.CycleSize()
 	l.Info().
 		Msgf("starting scheduler real-time tracking (cycle_size=%d, estimated_streamers=%d)",
-			cs, bs.opts.EstimatedObjects,
+			cs, bs.EstimatedObjects(),
 		)
 	bs.Start()
 

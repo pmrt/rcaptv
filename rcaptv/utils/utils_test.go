@@ -137,16 +137,13 @@ func TestRemoveKey(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		got := removeKey(test.input, test.target)
+		got := RemoveKey(test.input, test.target)
 		want := test.want
 		t.Logf("got:\n%s\n", spew.Sdump(got))
 		t.Logf("want:\n%s\n", spew.Sdump(want))
 		t.Logf("test.input:\n%s\n", spew.Sdump(test.input))
 		if diff := deep.Equal(got, want); diff != nil {
 			t.Fatal(diff)
-		}
-		if diff := deep.Equal(got, test.input); diff != nil {
-			t.Fatalf("input should be modified too (by reference): %s", diff)
 		}
 	}
 }

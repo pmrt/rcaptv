@@ -3,11 +3,11 @@ package repo
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 	"time"
 
 	. "github.com/go-jet/jet/v2/postgres"
 	"golang.org/x/oauth2"
+
 	"pedro.to/rcaptv/gen/tracker/public/model"
 	tbl "pedro.to/rcaptv/gen/tracker/public/table"
 )
@@ -107,31 +107,39 @@ func UpsertTokenPair(db *sql.DB, userID int64, t *oauth2.Token) error {
 	return nil
 }
 
-type DeleteExpiredParams struct {
+type DeleteTokenParams struct {
 	UserID       int64
-	TokenAccess  string
+	AccessToken  string
 	RefreshToken string
+
+	// If DeleteUnexpired is true. Valid tokens will be deleted too (default:false)
+	DeleteUnexpired bool
 }
 
-// DeleteExpired deletes expired tokens matching the provided parameters. If a
+// DeleteToken deletes expired tokens matching the provided parameters. If a
 // nil parameter object is passed, all expired tokens will be deleted.
-func DeleteExpired(db *sql.DB, p *DeleteExpiredParams) error {
+//
+// IF DeleteUnexpired=true is passed down in the params, DeleteToken will delete
+// matching non-expired tokens too
+func DeleteToken(db *sql.DB, p *DeleteTokenParams) error {
 	nowPlus10s := time.Now().Add(10 * time.Second)
 	stmt := tbl.TokenPairs.DELETE()
 	where := tbl.TokenPairs.ExpiresAt.LT(TimestampT(nowPlus10s))
 	if p != nil {
+		if p.DeleteUnexpired {
+			where = Bool(true)
+		}
 		if p.UserID != 0 {
 			where = where.AND(tbl.TokenPairs.UserID.EQ(Int(p.UserID)))
 		}
-		if p.TokenAccess != "" {
-			where = where.AND(tbl.TokenPairs.AccessToken.EQ(String(p.TokenAccess)))
+		if p.AccessToken != "" {
+			where = where.AND(tbl.TokenPairs.AccessToken.EQ(String(p.AccessToken)))
 		}
 		if p.RefreshToken != "" {
 			where = where.AND(tbl.TokenPairs.RefreshToken.EQ(String(p.RefreshToken)))
 		}
 	}
 	stmt = stmt.WHERE(where)
-	fmt.Println(stmt.DebugSql())
 	res, err := stmt.Exec(db)
 	if err != nil {
 		return err

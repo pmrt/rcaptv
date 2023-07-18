@@ -10,6 +10,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/twitch"
+
 	cfg "pedro.to/rcaptv/config"
 	"pedro.to/rcaptv/database"
 	"pedro.to/rcaptv/helix"
@@ -17,25 +19,23 @@ import (
 	"pedro.to/rcaptv/utils"
 )
 
-var (
-	scopes = []string{"user:read:email"}
-)
+var scopes = []string{"user:read:email"}
 
 type APIOpts struct {
 	Storage database.Storage
-	Helix   *helix.Helix
+
 	// Max difference between start/end for clips.
 	ClipsMaxPeriodDiffHours int
 
 	ClientID, ClientSecret string
 	HelixAPIUrl            string
 	HelixEventsubEndpoint  string
-	AuthRedirectURL        string
 }
 
 type API struct {
 	db          *sql.DB
-	hx          *helix.Helix // note: this is temporal. We should use user tokens
+	hx          *helix.Helix
+	tv          *TokenValidator
 	OAuthConfig *oauth2.Config
 
 	clipsMaxPeriodDiffHours int
@@ -66,7 +66,7 @@ func (a *API) Vods(c *fiber.Ctx) error {
 	vid := c.Query("vid")
 	after := c.Query("after")
 
-	var vids = make([]string, 0, 1)
+	vids := make([]string, 0, 1)
 	if username == "" {
 		if vid == "" {
 			if after == "" {
@@ -159,11 +159,6 @@ func (a *API) Clips(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(resp)
 	}
 
-	// check err and delete cookies if 401
-	// test hx.clips with context
-	// test hx.vods with context
-	// /login, /logout, /auth/redirect <----- guardar en cookie id, at, rt
-	// /validate token
 	clips, err := a.hx.DeepClips(&helix.DeepClipsParams{
 		ClipsParams: &helix.ClipsParams{
 			BroadcasterID:            bid,
@@ -199,33 +194,54 @@ func (a *API) checkErr(c *fiber.Ctx, err error) (*fiber.Ctx, error) {
 	}
 
 	if errors.Is(err, helix.ErrItemsEmpty) {
-		return c.Status(http.StatusNotFound), errors.New("no items found")
+		return c.Status(http.StatusNotFound), helix.ErrItemsEmpty
 	}
 
 	return c.Status(http.StatusInternalServerError), fmt.Errorf("unexpected error: %w", err)
+}
+
+// Starts the required services for the API. Make sure to call Shutdown()
+func (a *API) Start() {
+	// starts token validator to validate tokens from active users
+	go func() {
+		a.tv.Run()
+	}()
+}
+
+// Stops API services
+func (a *API) Shutdown() {
+	a.tv.Stop()
 }
 
 func New(opts APIOpts) *API {
 	if opts.ClipsMaxPeriodDiffHours == 0 {
 		opts.ClipsMaxPeriodDiffHours = 24 * 7
 	}
-	// o2cfg := &oauth2.Config{
-	// 	ClientID:     opts.ClientID,
-	// 	ClientSecret: opts.ClientSecret,
-	// 	Scopes:       scopes,
-	// 	Endpoint:     twitch.Endpoint,
-	// 	RedirectURL:  fmt.Sprintf("%s:%s%s%s", cfg.BaseURL, cfg.APIPort, cfg.AuthEndpoint, cfg.AuthRedirectEndpoint),
-	// }
+	db := opts.Storage.Conn()
 	api := &API{
-		db: opts.Storage.Conn(),
+		OAuthConfig: &oauth2.Config{
+			ClientID:     opts.ClientID,
+			ClientSecret: opts.ClientSecret,
+			Scopes:       scopes,
+			Endpoint:     twitch.Endpoint,
+			RedirectURL:  fmt.Sprintf("%s:%s%s%s", cfg.BaseURL, cfg.APIPort, cfg.AuthEndpoint, cfg.AuthRedirectEndpoint),
+		},
+		db: db,
 		hx: helix.NewWithUserTokens(&helix.HelixOpts{
 			Creds: helix.ClientCreds{
 				ClientID:     opts.ClientID,
 				ClientSecret: opts.ClientSecret,
 			},
 			APIUrl:           opts.HelixAPIUrl,
-			EventsubEndpoint: cfg.EventSubEndpoint,
+			EventsubEndpoint: "",
 		}),
+		tv: NewTokenValidator(db, helix.NewWithoutExchange(&helix.HelixOpts{
+			Creds: helix.ClientCreds{
+				ClientID:     "",
+				ClientSecret: "",
+			},
+			APIUrl: "",
+		})),
 		clipsMaxPeriodDiffHours: opts.ClipsMaxPeriodDiffHours,
 	}
 	return api

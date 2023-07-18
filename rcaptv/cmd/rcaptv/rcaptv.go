@@ -9,12 +9,12 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/template/handlebars/v2"
 	"github.com/rs/zerolog/log"
+
 	"pedro.to/rcaptv/api"
 	cfg "pedro.to/rcaptv/config"
 	"pedro.to/rcaptv/cookie"
 	"pedro.to/rcaptv/database"
 	"pedro.to/rcaptv/database/postgres"
-	"pedro.to/rcaptv/helix"
 	"pedro.to/rcaptv/logger"
 	"pedro.to/rcaptv/utils"
 )
@@ -87,19 +87,16 @@ func main() {
 	}))
 	app.Use(logger.Fiber())
 
-	hx := helix.New(&helix.HelixOpts{
-		Creds: helix.ClientCreds{
-			ClientID:     cfg.HelixClientID,
-			ClientSecret: cfg.HelixClientSecret,
-		},
-		APIUrl:           cfg.TwitchAPIUrl,
-		EventsubEndpoint: cfg.EventSubEndpoint,
-	})
 	rcapApi := api.New(api.APIOpts{
-		Helix:                   hx,
 		Storage:                 sto,
 		ClipsMaxPeriodDiffHours: cfg.ClipsMaxPeriodDiffHours,
+		ClientID:                cfg.HelixClientID,
+		ClientSecret:            cfg.HelixClientSecret,
+		HelixAPIUrl:             cfg.TwitchAPIUrl,
 	})
+	rcapApi.Start()
+	defer rcapApi.Shutdown()
+
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.Status(http.StatusOK).Send([]byte("ok"))
 	})
@@ -108,7 +105,8 @@ func main() {
 	auth := app.Group(cfg.AuthEndpoint)
 	auth.Get(cfg.AuthRedirectEndpoint, rcapApi.Callback)
 
-	v1 := app.Group("/v1")
+	v1 := app.Group("/api/v1", rcapApi.WithAuth)
+	v1.Get("/validate", rcapApi.ValidateSession)
 	v1.Get("/vods", rcapApi.Vods)
 	v1.Get("/clips", rcapApi.Clips)
 

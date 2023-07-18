@@ -16,6 +16,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 	"golang.org/x/oauth2/twitch"
+
 	"pedro.to/rcaptv/utils"
 )
 
@@ -28,20 +29,32 @@ const (
 
 type CtxHelixKey string
 
-const CtxHelixTokenSource CtxHelixKey = "helix"
+const CtxHelixTokenSource CtxHelixKey = "helix_token_source"
+
+const CtxHelixCustomQuery CtxHelixKey = "helix_custom_query"
+
+type CustomQueryOpts struct {
+	UseClientID bool
+}
 
 func ContextWithTokenSource(tk *oauth2.Token, opts NotifyReuseTokenSourceOpts) context.Context {
 	src := NotifyReuseTokenSource(tk, opts)
 	return context.WithValue(context.Background(), CtxHelixTokenSource, src)
 }
 
+func ContextWithCustomQueryOpts(opts *CustomQueryOpts) context.Context {
+	return context.WithValue(context.Background(), CtxHelixCustomQuery, opts)
+}
+
 const EstimatedSubscriptionJSONSize = 350
 
 // Note: thinking about moving this to opts? Maybe it's time for a custom http
 // client
-const HttpMaxAttempts = 3
-const HttpRetryDelay = time.Second * 5
-const HttpMaxClientResponseReadLimitBytes = 1 * MB
+const (
+	HttpMaxAttempts                     = 3
+	HttpRetryDelay                      = time.Second * 5
+	HttpMaxClientResponseReadLimitBytes = 1 * MB
+)
 
 var (
 	ErrTooManyRequestAttempts = errors.New("no attempts left for performing requests")
@@ -109,6 +122,7 @@ type HelixOpts struct {
 
 	APIUrl           string
 	EventsubEndpoint string
+	ValidateEndpoint string
 
 	// Event handlers
 	HandleStreamOnline  func(evt *EventStreamOnline)
@@ -123,9 +137,10 @@ type HelixOpts struct {
 // Helix is safe for concurrent access if opts are never mutated after
 // initialization
 type Helix struct {
-	ctx           context.Context
-	opts          *HelixOpts
-	defaultClient *http.Client
+	ctx              context.Context
+	opts             *HelixOpts
+	defaultClient    *http.Client
+	defaultQueryOpts *CustomQueryOpts
 
 	useUserTokens bool
 }
@@ -155,6 +170,10 @@ func (hx *Helix) ClientSecret() string {
 // the client would need mutexes for safe concurrent access.
 func (hx *Helix) APIUrl() string {
 	return hx.opts.APIUrl
+}
+
+func (hx *Helix) ValidateEndpoint() string {
+	return hx.opts.ValidateEndpoint
 }
 
 // EventsubEndpoint returns the twitch eventsub endpoint which the helix client
@@ -249,11 +268,19 @@ PaginationLoop:
 func (hx *Helix) doAtMost(req *http.Request, attemptsLeft int) (*HttpResponse, error) {
 	lctx := log.With().
 		Str("ctx", "helix")
+
 	if attemptsLeft <= 0 {
 		return nil, ErrTooManyRequestAttempts
 	}
 
-	if hx.ClientSecret() != "" {
+	ctx := req.Context()
+
+	qopts := hx.defaultQueryOpts
+	if o, ok := ctx.Value(CtxHelixCustomQuery).(*CustomQueryOpts); ok && o != nil {
+		qopts = o
+	}
+
+	if hx.ClientSecret() != "" && qopts.UseClientID {
 		req.Header.Set("Client-Id", hx.ClientID())
 	}
 
@@ -269,7 +296,7 @@ func (hx *Helix) doAtMost(req *http.Request, attemptsLeft int) (*HttpResponse, e
 
 	c := hx.defaultClient
 	if hx.useUserTokens {
-		ts, ok := req.Context().Value(CtxHelixTokenSource).(oauth2.TokenSource)
+		ts, ok := ctx.Value(CtxHelixTokenSource).(oauth2.TokenSource)
 		if !ok {
 			l.Err(ErrInvalidContext).Msg("invalid context")
 			return nil, ErrInvalidContext
@@ -394,7 +421,10 @@ func NewWithoutExchange(opts *HelixOpts, c ...*http.Client) *Helix {
 	hx := &Helix{
 		opts:          opts,
 		defaultClient: http.DefaultClient,
-		ctx:           context.Background(),
+		defaultQueryOpts: &CustomQueryOpts{
+			UseClientID: true,
+		},
+		ctx: context.Background(),
 	}
 	if len(c) == 1 {
 		hx.defaultClient = c[0]
@@ -407,6 +437,9 @@ func NewWithoutExchange(opts *HelixOpts, c ...*http.Client) *Helix {
 	}
 	if hx.opts.HandleRevocation == nil {
 		hx.opts.HandleRevocation = func(evt *WebhookRevokePayload) {}
+	}
+	if hx.opts.ValidateEndpoint == "" {
+		hx.opts.ValidateEndpoint = TwitchValidateEndpoint
 	}
 	return hx
 }

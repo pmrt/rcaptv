@@ -28,14 +28,8 @@ func UserID(c *fiber.Ctx) int64 {
 }
 
 // Token collector service (3d?)
-// Token validator service (1h)
 // webapp (redirect everything to / except /login, etc)
-
-// servicio para borrar tokens exp cada día
-// servicio cada hora para validar tokens
-// borrar cookies
-// añadir cookies
-// meter en ctx el tokenSource con WithAuth
+// Split up api from webserver
 
 func (a *API) WithAuth(c *fiber.Ctx) error {
 	creds := cookie.Fiber(c, cookie.CredentialsCookie)
@@ -200,7 +194,7 @@ func (a *API) ValidateSession(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString("invalid user")
 	}
 
-	if err := a.AddOrUpdateUser(c, &resp.Data[0], &oauth2.Token{
+	if err := a.upsertUser(c, &resp.Data[0], &oauth2.Token{
 		AccessToken:  at,
 		RefreshToken: creds.Get(cookie.RefreshToken),
 		Expiry:       creds.GetTime(cookie.Expiry),
@@ -211,25 +205,42 @@ func (a *API) ValidateSession(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusOK)
 }
 
-func (a *API) AddOrUpdateUser(c *fiber.Ctx, usr *helix.User, t *oauth2.Token) error {
+// upsertSession adds or updates the session. An existing user in the database
+// is required.
+//
+// Usr is not required, but provide it if it is already available from where
+// this method is called, it saves a roundtrip to the database.
+func (a *API) upsertSession(c *fiber.Ctx, t *oauth2.Token, usrid int64, usr *helix.User) error {
+	if usrid == 0 {
+		a.clearAuthCookies(c)
+		return errors.New("corrupt user")
+	}
+	// upsert token pair in database
+	if err := repo.UpsertTokenPair(a.db, usrid, t); err != nil {
+		return err
+	}
+	// update token and session data in cookies
+	if err := a.setSessionCookies(c, SessionCookiesParams{
+		Token:  t,
+		UserID: usrid,
+		User:   usr,
+	}); err != nil {
+		return err
+	}
+	// update token validator schedule. We consider an user active when the
+	// session is updated
+	a.tv.AddUser(usrid)
+	return nil
+}
+
+// upsertUser adds or updates the user
+func (a *API) upsertUser(c *fiber.Ctx, usr *helix.User, t *oauth2.Token) error {
 	// upsert user in database
 	id, err := repo.UpsertUser(a.db, usr)
 	if err != nil {
 		return err
 	}
-	// upsert token pair in database
-	if err := repo.UpsertTokenPair(a.db, id, t); err != nil {
-		return err
-	}
-	// update cookies
-	if err := a.setSessionCookies(c, SessionCookiesParams{
-		Token:  t,
-		UserID: id,
-		User:   usr,
-	}); err != nil {
-		return err
-	}
-	return nil
+	return a.upsertSession(c, t, id, usr)
 }
 
 // onTokenRefresh is called when the token is being refreshed. Generally from
@@ -237,23 +248,7 @@ func (a *API) AddOrUpdateUser(c *fiber.Ctx, usr *helix.User, t *oauth2.Token) er
 // Assumes an existing user in the database. Errors will propagate back to the
 // http client
 func (a *API) onTokenRefresh(c *fiber.Ctx, t *oauth2.Token) error {
-	id := UserID(c)
-	if id == 0 {
-		a.clearAuthCookies(c)
-		return errors.New("corrupt user")
-	}
-	// update db
-	if err := repo.UpsertTokenPair(a.db, id, t); err != nil {
-		return err
-	}
-	// update cookies
-	if err := a.setSessionCookies(c, SessionCookiesParams{
-		Token:  t,
-		UserID: id,
-	}); err != nil {
-		return err
-	}
-	return nil
+	return a.upsertSession(c, t, UserID(c), nil)
 }
 
 func (a *API) Login(c *fiber.Ctx) error {
@@ -314,7 +309,7 @@ func (a *API) Callback(c *fiber.Ctx) error {
 	if err != nil || len(resp.Data) != 1 {
 		return c.Status(fiber.StatusInternalServerError).SendString("invalid user")
 	}
-	if err := a.AddOrUpdateUser(c, &resp.Data[0], tk); err != nil {
+	if err := a.upsertUser(c, &resp.Data[0], tk); err != nil {
 		a.clearAuthCookies(c)
 		return c.Status(fiber.StatusInternalServerError).SendString("failed to create user")
 	}
