@@ -10,16 +10,14 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/twitch"
 
 	cfg "pedro.to/rcaptv/config"
+	"pedro.to/rcaptv/cookie"
 	"pedro.to/rcaptv/database"
 	"pedro.to/rcaptv/helix"
 	"pedro.to/rcaptv/repo"
 	"pedro.to/rcaptv/utils"
 )
-
-var scopes = []string{"user:read:email"}
 
 type APIOpts struct {
 	Storage database.Storage
@@ -35,8 +33,7 @@ type APIOpts struct {
 type API struct {
 	db          *sql.DB
 	hx          *helix.Helix
-	tv          *TokenValidator
-	OAuthConfig *oauth2.Config
+	oAuthConfig *oauth2.Config
 
 	clipsMaxPeriodDiffHours int
 }
@@ -189,7 +186,7 @@ func (a *API) checkErr(c *fiber.Ctx, err error) (*fiber.Ctx, error) {
 	}
 
 	if errors.Is(err, helix.ErrUnauthorized) {
-		a.clearAuthCookies(c)
+		clearAuthCookies(c)
 		return c.Status(http.StatusUnauthorized), helix.ErrUnauthorized
 	}
 
@@ -200,17 +197,9 @@ func (a *API) checkErr(c *fiber.Ctx, err error) (*fiber.Ctx, error) {
 	return c.Status(http.StatusInternalServerError), fmt.Errorf("unexpected error: %w", err)
 }
 
-// Starts the required services for the API. Make sure to call Shutdown()
-func (a *API) Start() {
-	// starts token validator to validate tokens from active users
-	go func() {
-		a.tv.Run()
-	}()
-}
-
-// Stops API services
-func (a *API) Shutdown() {
-	a.tv.Stop()
+func clearAuthCookies(c *fiber.Ctx) {
+	c.ClearCookie(cookie.CredentialsCookie)
+	c.ClearCookie(cookie.UserCookie)
 }
 
 func New(opts APIOpts) *API {
@@ -219,29 +208,15 @@ func New(opts APIOpts) *API {
 	}
 	db := opts.Storage.Conn()
 	api := &API{
-		OAuthConfig: &oauth2.Config{
-			ClientID:     opts.ClientID,
-			ClientSecret: opts.ClientSecret,
-			Scopes:       scopes,
-			Endpoint:     twitch.Endpoint,
-			RedirectURL:  fmt.Sprintf("%s:%s%s%s", cfg.BaseURL, cfg.APIPort, cfg.AuthEndpoint, cfg.AuthRedirectEndpoint),
-		},
-		db: db,
+		oAuthConfig: cfg.OAuthConfig(),
+		db:          db,
 		hx: helix.NewWithUserTokens(&helix.HelixOpts{
 			Creds: helix.ClientCreds{
 				ClientID:     opts.ClientID,
 				ClientSecret: opts.ClientSecret,
 			},
-			APIUrl:           opts.HelixAPIUrl,
-			EventsubEndpoint: "",
+			APIUrl: opts.HelixAPIUrl,
 		}),
-		tv: NewTokenValidator(db, helix.NewWithoutExchange(&helix.HelixOpts{
-			Creds: helix.ClientCreds{
-				ClientID:     "",
-				ClientSecret: "",
-			},
-			APIUrl: "",
-		})),
 		clipsMaxPeriodDiffHours: opts.ClipsMaxPeriodDiffHours,
 	}
 	return api

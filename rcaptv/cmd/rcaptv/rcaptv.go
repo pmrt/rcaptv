@@ -17,6 +17,7 @@ import (
 	"pedro.to/rcaptv/database/postgres"
 	"pedro.to/rcaptv/logger"
 	"pedro.to/rcaptv/utils"
+	"pedro.to/rcaptv/webserver"
 )
 
 func main() {
@@ -94,21 +95,27 @@ func main() {
 		ClientSecret:            cfg.HelixClientSecret,
 		HelixAPIUrl:             cfg.TwitchAPIUrl,
 	})
-	rcapApi.Start()
-	defer rcapApi.Shutdown()
+	websv := webserver.New(webserver.WebServerOpts{
+		Storage:      sto,
+		ClientID:     cfg.HelixClientID,
+		ClientSecret: cfg.HelixClientSecret,
+		HelixAPIUrl:  cfg.TwitchAPIUrl,
+	})
+	websv.Start()
+	defer websv.Shutdown()
 
-	app.Get("/health", func(c *fiber.Ctx) error {
+	app.Get(cfg.HealthEndpoint, func(c *fiber.Ctx) error {
 		return c.Status(http.StatusOK).Send([]byte("ok"))
 	})
 
-	app.Get("/login", rcapApi.Login)
+	app.Get(cfg.LoginEndpoint, websv.Login)
 	auth := app.Group(cfg.AuthEndpoint)
-	auth.Get(cfg.AuthRedirectEndpoint, rcapApi.Callback)
+	auth.Get(cfg.AuthRedirectEndpoint, websv.Callback)
 
-	v1 := app.Group("/api/v1", rcapApi.WithAuth)
-	v1.Get("/validate", rcapApi.ValidateSession)
-	v1.Get("/vods", rcapApi.Vods)
-	v1.Get("/clips", rcapApi.Clips)
+	v1 := app.Group(cfg.APIEndpoint, websv.WithAuth)
+	v1.Get(cfg.APIValidateEndpoint, websv.ValidateSession)
+	v1.Get(cfg.APIVodsEndpoint, rcapApi.Vods)
+	v1.Get(cfg.APIClipsEndpoint, rcapApi.Clips)
 
 	go func() {
 		l.Info().Msgf("rcaptv server listening on port:%s", cfg.APIPort)

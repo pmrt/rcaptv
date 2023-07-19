@@ -1,4 +1,4 @@
-package api
+package webserver
 
 import (
 	"net/http/httptest"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/oauth2"
+
 	"pedro.to/rcaptv/helix"
 )
 
@@ -14,7 +15,7 @@ func TestSetSessionCookies(t *testing.T) {
 	t.Parallel()
 	app := fiber.New()
 
-	api := &API{
+	sv := &WebServer{
 		db: nil,
 		hx: nil,
 	}
@@ -47,7 +48,7 @@ func TestSetSessionCookies(t *testing.T) {
 	}
 
 	app.Get("/test", func(c *fiber.Ctx) error {
-		if err := api.setSessionCookies(c, params); err != nil {
+		if err := sv.setSessionCookies(c, params); err != nil {
 			t.Fatal(err)
 		}
 		return nil

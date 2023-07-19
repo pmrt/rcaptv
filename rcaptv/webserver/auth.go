@@ -1,4 +1,4 @@
-package api
+package webserver
 
 import (
 	"context"
@@ -29,13 +29,12 @@ func UserID(c *fiber.Ctx) int64 {
 
 // Token collector service (3d?)
 // webapp (redirect everything to / except /login, etc)
-// Split up api from webserver
 
-func (a *API) WithAuth(c *fiber.Ctx) error {
+func (sv *WebServer) WithAuth(c *fiber.Ctx) error {
 	creds := cookie.Fiber(c, cookie.CredentialsCookie)
 	if creds.IsEmpty() {
 		// clear just in case it is corrupt or the user cookie is still there
-		a.clearAuthCookies(c)
+		sv.clearAuthCookies(c)
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
@@ -47,9 +46,9 @@ func (a *API) WithAuth(c *fiber.Ctx) error {
 	}
 	// add tokenSource to Ctx to use and refresh tokens in the request stack
 	ctx := helix.ContextWithTokenSource(t, helix.NotifyReuseTokenSourceOpts{
-		OAuthConfig: a.OAuthConfig,
+		OAuthConfig: sv.oAuthConfig,
 		Notify: func(t *oauth2.Token) error {
-			return a.onTokenRefresh(c, t)
+			return sv.onTokenRefresh(c, t)
 		},
 	})
 	// make user id available too in the request stack
@@ -86,12 +85,12 @@ var timeNow = time.Now
 // The only required parameter is the Token and the ID if the api context does
 // not contain it. Prefer passing down everything if possible. User will save
 // a roundtrip to the database if provided.
-func (a *API) setSessionCookies(c *fiber.Ctx, p SessionCookiesParams) error {
+func (sv *WebServer) setSessionCookies(c *fiber.Ctx, p SessionCookiesParams) error {
 	var id int64
 	if p.UserID == 0 {
 		id = UserID(c)
 		if id == 0 {
-			a.clearAuthCookies(c)
+			sv.clearAuthCookies(c)
 			return errors.New("corrupt user")
 		}
 	}
@@ -117,7 +116,7 @@ func (a *API) setSessionCookies(c *fiber.Ctx, p SessionCookiesParams) error {
 
 	usrCookie := cookie.New()
 	if p.User == nil {
-		usr, err := repo.User(a.db, repo.UserQueryParams{
+		usr, err := repo.User(sv.db, repo.UserQueryParams{
 			UserID: id,
 		})
 		if err != nil {
@@ -150,7 +149,7 @@ func (a *API) setSessionCookies(c *fiber.Ctx, p SessionCookiesParams) error {
 	return nil
 }
 
-func (a *API) clearAuthCookies(c *fiber.Ctx) {
+func (sv *WebServer) clearAuthCookies(c *fiber.Ctx) {
 	c.ClearCookie(cookie.CredentialsCookie)
 	c.ClearCookie(cookie.UserCookie)
 }
@@ -163,21 +162,21 @@ func (a *API) clearAuthCookies(c *fiber.Ctx) {
 //
 // It assumes that the UserID and tokenSource is already in the request context,
 // so call it after the WithAuth middleware.
-func (a *API) ValidateSession(c *fiber.Ctx) error {
+func (sv *WebServer) ValidateSession(c *fiber.Ctx) error {
 	creds := cookie.Fiber(c, cookie.CredentialsCookie)
 	id := creds.GetInt64(cookie.UserId)
 	if id == 0 {
-		a.clearAuthCookies(c)
+		sv.clearAuthCookies(c)
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 	at := creds.Get(cookie.AccessToken)
-	if repo.ValidToken(a.db, id, at) {
+	if repo.ValidToken(sv.db, id, at) {
 		return c.SendStatus(fiber.StatusOK)
 	}
 	// try to get user with invalid access token and current context with
 	// tokenSource. If refresh token is still valid this should work, we would
 	// get the user and update both: the user and the token
-	resp, err := a.hx.User(&helix.UserParams{
+	resp, err := sv.hx.User(&helix.UserParams{
 		Context: c.Context(),
 	})
 	if err != nil {
@@ -185,7 +184,7 @@ func (a *API) ValidateSession(c *fiber.Ctx) error {
 			// refresh token failed. Maybe twitch revoked it or user disconnected
 			// our app. Clear cookies. The token collector will get rid of the
 			// expired tokens in the database
-			a.clearAuthCookies(c)
+			sv.clearAuthCookies(c)
 			return c.SendStatus(fiber.StatusUnauthorized)
 		}
 		return c.SendStatus(fiber.StatusInternalServerError)
@@ -194,7 +193,7 @@ func (a *API) ValidateSession(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString("invalid user")
 	}
 
-	if err := a.upsertUser(c, &resp.Data[0], &oauth2.Token{
+	if err := sv.upsertUser(c, &resp.Data[0], &oauth2.Token{
 		AccessToken:  at,
 		RefreshToken: creds.Get(cookie.RefreshToken),
 		Expiry:       creds.GetTime(cookie.Expiry),
@@ -210,17 +209,17 @@ func (a *API) ValidateSession(c *fiber.Ctx) error {
 //
 // Usr is not required, but provide it if it is already available from where
 // this method is called, it saves a roundtrip to the database.
-func (a *API) upsertSession(c *fiber.Ctx, t *oauth2.Token, usrid int64, usr *helix.User) error {
+func (sv *WebServer) upsertSession(c *fiber.Ctx, t *oauth2.Token, usrid int64, usr *helix.User) error {
 	if usrid == 0 {
-		a.clearAuthCookies(c)
+		sv.clearAuthCookies(c)
 		return errors.New("corrupt user")
 	}
 	// upsert token pair in database
-	if err := repo.UpsertTokenPair(a.db, usrid, t); err != nil {
+	if err := repo.UpsertTokenPair(sv.db, usrid, t); err != nil {
 		return err
 	}
 	// update token and session data in cookies
-	if err := a.setSessionCookies(c, SessionCookiesParams{
+	if err := sv.setSessionCookies(c, SessionCookiesParams{
 		Token:  t,
 		UserID: usrid,
 		User:   usr,
@@ -229,30 +228,30 @@ func (a *API) upsertSession(c *fiber.Ctx, t *oauth2.Token, usrid int64, usr *hel
 	}
 	// update token validator schedule. We consider an user active when the
 	// session is updated
-	a.tv.AddUser(usrid)
+	sv.tv.AddUser(usrid)
 	return nil
 }
 
 // upsertUser adds or updates the user
-func (a *API) upsertUser(c *fiber.Ctx, usr *helix.User, t *oauth2.Token) error {
+func (sv *WebServer) upsertUser(c *fiber.Ctx, usr *helix.User, t *oauth2.Token) error {
 	// upsert user in database
-	id, err := repo.UpsertUser(a.db, usr)
+	id, err := repo.UpsertUser(sv.db, usr)
 	if err != nil {
 		return err
 	}
-	return a.upsertSession(c, t, id, usr)
+	return sv.upsertSession(c, t, id, usr)
 }
 
 // onTokenRefresh is called when the token is being refreshed. Generally from
 // the tokenSource when the token expired before/in the middle of a request.
 // Assumes an existing user in the database. Errors will propagate back to the
 // http client
-func (a *API) onTokenRefresh(c *fiber.Ctx, t *oauth2.Token) error {
-	return a.upsertSession(c, t, UserID(c), nil)
+func (sv *WebServer) onTokenRefresh(c *fiber.Ctx, t *oauth2.Token) error {
+	return sv.upsertSession(c, t, UserID(c), nil)
 }
 
-func (a *API) Login(c *fiber.Ctx) error {
-	if err := a.ValidateSession(c); err == nil {
+func (sv *WebServer) Login(c *fiber.Ctx) error {
+	if err := sv.ValidateSession(c); err == nil {
 		// session is valid, do nothing
 		return c.Redirect("/", fiber.StatusTemporaryRedirect)
 	}
@@ -273,10 +272,10 @@ func (a *API) Login(c *fiber.Ctx) error {
 		Secure:   true,
 	})
 
-	return c.Redirect(a.OAuthConfig.AuthCodeURL(state), fiber.StatusTemporaryRedirect)
+	return c.Redirect(sv.oAuthConfig.AuthCodeURL(state), fiber.StatusTemporaryRedirect)
 }
 
-func (a *API) Callback(c *fiber.Ctx) error {
+func (sv *WebServer) Callback(c *fiber.Ctx) error {
 	defer func() {
 		// whatever happens, clear the state cookie
 		c.ClearCookie(cookie.OauthStateCookie)
@@ -293,24 +292,24 @@ func (a *API) Callback(c *fiber.Ctx) error {
 		return c.Render("views/access_denied", nil)
 	}
 
-	tk, err := a.OAuthConfig.Exchange(context.Background(), c.Query("code"))
+	tk, err := sv.oAuthConfig.Exchange(context.Background(), c.Query("code"))
 	if err != nil {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 
 	ctx := helix.ContextWithTokenSource(tk, helix.NotifyReuseTokenSourceOpts{
-		OAuthConfig: a.OAuthConfig,
+		OAuthConfig: sv.oAuthConfig,
 		// omit notify since we just got a new token pair and we don't expect it to
 		// be refreshed during this request.
 	})
-	resp, err := a.hx.User(&helix.UserParams{
+	resp, err := sv.hx.User(&helix.UserParams{
 		Context: ctx,
 	})
 	if err != nil || len(resp.Data) != 1 {
 		return c.Status(fiber.StatusInternalServerError).SendString("invalid user")
 	}
-	if err := a.upsertUser(c, &resp.Data[0], tk); err != nil {
-		a.clearAuthCookies(c)
+	if err := sv.upsertUser(c, &resp.Data[0], tk); err != nil {
+		sv.clearAuthCookies(c)
 		return c.Status(fiber.StatusInternalServerError).SendString("failed to create user")
 	}
 	return c.Redirect("/", fiber.StatusTemporaryRedirect)

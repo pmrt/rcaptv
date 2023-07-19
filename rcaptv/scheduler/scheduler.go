@@ -154,6 +154,28 @@ func (s *Schedule) Pick(min Minute) []string {
 	return s.schedule[min]
 }
 
+// return a clone of current contents of schedule. Useful for testing
+func (s *Schedule) TestSchedule() ScheduleMap {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	clone := make(ScheduleMap, len(s.schedule))
+	for k, v := range s.schedule {
+		clone[k] = v
+	}
+	return clone
+}
+
+// return a clone of current contents of keyToMinute. Useful for testing
+func (s *Schedule) TestKeyToMinute() KeyToMinuteMap {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	clone := make(KeyToMinuteMap, len(s.keyToMin))
+	for k, v := range s.keyToMin {
+		clone[k] = v
+	}
+	return clone
+}
+
 // BalancedSchedule balances the objects in a given cycle size. Objects can
 // be hot-added while the scheduler is running.
 //
@@ -203,6 +225,14 @@ func (bs *BalancedSchedule) CycleSize() uint {
 
 func (bs *BalancedSchedule) EstimatedObjects() uint {
 	return bs.opts.EstimatedObjects
+}
+
+func (bs *BalancedSchedule) TestSchedule() ScheduleMap {
+	return bs.internal.TestSchedule()
+}
+
+func (bs *BalancedSchedule) TestKeyToMinute() KeyToMinuteMap {
+	return bs.internal.TestKeyToMinute()
 }
 
 // Starts real-time scheduler.

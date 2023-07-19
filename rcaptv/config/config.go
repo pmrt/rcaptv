@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"reflect"
 	"strconv"
@@ -8,6 +9,8 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	l "github.com/rs/zerolog/log"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/twitch"
 
 	"pedro.to/rcaptv/logger"
 )
@@ -73,6 +76,18 @@ var (
 
 	Debug bool
 )
+
+var Scopes = []string{"user:read:email"}
+
+func OAuthConfig() *oauth2.Config {
+	return &oauth2.Config{
+		ClientID:     HelixClientID,
+		ClientSecret: HelixClientSecret,
+		Scopes:       Scopes,
+		Endpoint:     twitch.Endpoint,
+		RedirectURL:  fmt.Sprintf("%s:%s%s%s", BaseURL, APIPort, AuthEndpoint, AuthRedirectEndpoint),
+	}
+}
 
 type SupportStringconv interface {
 	~int | ~int8 | ~int64 | ~float32 | ~string | ~bool

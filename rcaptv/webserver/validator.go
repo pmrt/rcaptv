@@ -1,9 +1,10 @@
-package api
+package webserver
 
 import (
 	"context"
 	"database/sql"
 	"strconv"
+	"time"
 
 	"github.com/rs/zerolog/log"
 
@@ -29,7 +30,12 @@ func (v *TokenValidator) RemoveUser(id int64) {
 	v.balancer.Remove(strconv.FormatInt(id, 10))
 }
 
+func (v *TokenValidator) Reset() {
+	v.ctx, v.cancel = context.WithCancel(context.Background())
+}
+
 func (v *TokenValidator) Run() error {
+	v.Reset()
 	l := log.With().Str("ctx", "token_validator").Logger()
 	l.Info().Msgf("initializing token validator (cycle:1h, estimated_active_users:%d)", v.balancer.EstimatedObjects())
 	v.balancer.Start()
@@ -57,6 +63,7 @@ func (v *TokenValidator) Run() error {
 						allInvalid = false
 						continue
 					}
+
 					// invalid token
 					if err := repo.DeleteToken(v.db, &repo.DeleteTokenParams{
 						UserID:          usrid,
@@ -86,19 +93,23 @@ func (v *TokenValidator) Run() error {
 }
 
 func (v *TokenValidator) Stop() {
+	v.balancer.Cancel()
 	v.cancel()
 }
 
+var (
+	cycleSize = uint(60)
+	freq      = time.Minute
+)
+
 func NewTokenValidator(db *sql.DB, hx *helix.Helix) *TokenValidator {
-	ctx, cancel := context.WithCancel(context.Background())
 	return &TokenValidator{
 		balancer: scheduler.New(scheduler.BalancedScheduleOpts{
-			CycleSize:        uint(60),
+			CycleSize:        cycleSize,
 			EstimatedObjects: uint(cfg.EstimatedActiveUsers),
+			Freq:             freq,
 		}),
-		db:     db,
-		hx:     hx,
-		ctx:    ctx,
-		cancel: cancel,
+		db: db,
+		hx: hx,
 	}
 }
