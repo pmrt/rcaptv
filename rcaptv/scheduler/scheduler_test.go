@@ -176,7 +176,7 @@ Cycle:
 		case <-timer.C:
 			timer.Stop()
 			t.Log("cancel")
-			bs.Cancel()
+			bs.Stop()
 			break Cycle
 		case m := <-bs.RealTime():
 			r = append(r, m)

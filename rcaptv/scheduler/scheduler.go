@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"context"
 	"strconv"
 	"sync"
 	"time"
@@ -187,6 +188,8 @@ type BalancedSchedule struct {
 	internal       Schedule
 	realTime       chan RealTimeMinute
 	cancelRealTime chan struct{}
+	ctx            context.Context
+	cancel         context.CancelFunc
 
 	opts BalancedScheduleOpts
 }
@@ -241,36 +244,37 @@ func (bs *BalancedSchedule) TestKeyToMinute() KeyToMinuteMap {
 // RealTimeMinute object with the minute and the objects corresponding to that
 // minute.
 //
-// The scheduler must be stopped with bs.Cancel()
+// The scheduler must be stopped with bs.Stop()
 func (bs *BalancedSchedule) Start() {
+	bs.ctx, bs.cancel = context.WithCancel(context.Background())
+	ticker := time.NewTicker(bs.opts.Freq)
+	m := ResetMinute
+	max := Minute(bs.opts.CycleSize - 1)
 	go func() {
-		m := ResetMinute
-		max := Minute(bs.opts.CycleSize - 1)
-		d := bs.opts.Freq
-
-		// wait for the first one too. It's just easier to test
-		time.Sleep(d)
+		defer ticker.Stop()
 		for {
-			if bs == nil {
-				return
-			}
 			select {
-			case bs.realTime <- RealTimeMinute{Min: m, Objects: bs.Pick(m)}:
-				time.Sleep(d)
+			case <-bs.ctx.Done():
+				bs.ctx = nil
+				bs.cancel = nil
+				return
+			case <-ticker.C:
+				bs.realTime <- RealTimeMinute{Min: m, Objects: bs.Pick(m)}
 				if m >= max {
 					m = ResetMinute
 				} else {
 					m++
 				}
-			case <-bs.cancelRealTime:
-				return
 			}
 		}
 	}()
 }
 
-func (bs *BalancedSchedule) Cancel() {
-	bs.cancelRealTime <- struct{}{}
+// Stop the scheduler. Stop is idempotent
+func (bs *BalancedSchedule) Stop() {
+	if bs.ctx != nil && bs.cancel != nil {
+		bs.cancel()
+	}
 }
 
 func New(opts BalancedScheduleOpts) *BalancedSchedule {
@@ -302,9 +306,7 @@ func New(opts BalancedScheduleOpts) *BalancedSchedule {
 			schedule: pre,
 			keyToMin: make(KeyToMinuteMap),
 		},
+		realTime: make(chan RealTimeMinute),
 	}
-	bs.realTime = make(chan RealTimeMinute)
-	bs.cancelRealTime = make(chan struct{}, 1)
-
 	return bs
 }

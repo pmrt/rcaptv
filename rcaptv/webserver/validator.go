@@ -93,7 +93,7 @@ func (v *TokenValidator) Run() error {
 }
 
 func (v *TokenValidator) Stop() {
-	v.balancer.Cancel()
+	v.balancer.Stop()
 	v.cancel()
 }
 

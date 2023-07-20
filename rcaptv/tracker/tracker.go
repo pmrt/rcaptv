@@ -147,7 +147,7 @@ func (t *Tracker) Run() error {
 		case <-t.ctx.Done():
 			l.Info().Msg("stopping scheduler real-time tracking")
 			t.stopped = true
-			bs.Cancel()
+			bs.Stop()
 			return t.ctx.Err()
 		}
 	}
