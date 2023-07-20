@@ -4,14 +4,14 @@ import (
 	"context"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	cfg "pedro.to/rcaptv/config"
 	"pedro.to/rcaptv/database"
 	"pedro.to/rcaptv/database/postgres"
 	"pedro.to/rcaptv/helix"
 	"pedro.to/rcaptv/tracker"
 	"pedro.to/rcaptv/utils"
-
-	"github.com/rs/zerolog/log"
 )
 
 func main() {
