@@ -16,7 +16,8 @@ import (
 	"pedro.to/rcaptv/scheduler"
 )
 
-func TestValidator(t *testing.T) {
+func TestTokenValidator(t *testing.T) {
+	defer cleanupUserAndTokens()
 	twitchCreatedAt, err := time.Parse(time.RFC3339, "2015-05-02T17:47:43Z")
 	if err != nil {
 		t.Fatal(err)
@@ -118,6 +119,17 @@ func TestValidator(t *testing.T) {
 		t.Fatalf("expected keyToMin to have %d users, got %d", wantN, gotN)
 	}
 
+	tks, err := repo.TokenPair(db, repo.TokenPairParams{
+		UserID:  id,
+		Invalid: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tks) != 2 {
+		t.Fatalf("expected 2 tokens, got %d", len(tks))
+	}
+
 	wg.Add(1)
 	go func() {
 		tv.Run()
@@ -151,5 +163,20 @@ func TestValidator(t *testing.T) {
 	wantN = 0
 	if gotN != wantN {
 		t.Fatalf("expected keyToMin to have %d users, got %d", wantN, gotN)
+	}
+
+	tks, err = repo.TokenPair(db, repo.TokenPairParams{
+		UserID:  id,
+		Invalid: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tks) != 1 {
+		t.Fatalf("expected 1 tokens, got %d", len(tks))
+	}
+	got, want = tks[0].AccessToken, "ACCESS2_EXPIRED"
+	if got != want {
+		t.Fatalf("expected token in db to be '%s', got:'%s' ", want, got)
 	}
 }
