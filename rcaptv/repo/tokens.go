@@ -121,7 +121,7 @@ type DeleteTokenParams struct {
 //
 // IF DeleteUnexpired=true is passed down in the params, DeleteToken will delete
 // matching non-expired tokens too
-func DeleteToken(db *sql.DB, p *DeleteTokenParams) error {
+func DeleteToken(db *sql.DB, p *DeleteTokenParams) (int64, error) {
 	nowPlus10s := time.Now().Add(10 * time.Second)
 	stmt := tbl.TokenPairs.DELETE()
 	where := tbl.TokenPairs.ExpiresAt.LT(TimestampT(nowPlus10s))
@@ -142,14 +142,14 @@ func DeleteToken(db *sql.DB, p *DeleteTokenParams) error {
 	stmt = stmt.WHERE(where)
 	res, err := stmt.Exec(db)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if n == 0 {
-		return ErrNoRowsAffected
+		return 0, ErrNoRowsAffected
 	}
-	return nil
+	return n, nil
 }

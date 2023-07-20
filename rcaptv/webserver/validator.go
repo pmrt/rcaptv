@@ -65,7 +65,7 @@ func (v *TokenValidator) Run() error {
 					}
 
 					// invalid token
-					if err := repo.DeleteToken(v.db, &repo.DeleteTokenParams{
+					if _, err := repo.DeleteToken(v.db, &repo.DeleteTokenParams{
 						UserID:          usrid,
 						AccessToken:     tk.AccessToken,
 						DeleteUnexpired: true,

@@ -276,7 +276,7 @@ func TestDeleteExpired(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := DeleteToken(db, nil); err != nil {
+	if _, err := DeleteToken(db, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -357,7 +357,7 @@ func TestDeleteExpiredSingle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := DeleteToken(db, &DeleteTokenParams{
+	if _, err := DeleteToken(db, &DeleteTokenParams{
 		UserID:      id,
 		AccessToken: "ACCESS4",
 	}); err != nil {
@@ -377,7 +377,7 @@ func TestDeleteExpiredSingle(t *testing.T) {
 		t.Fatalf("expected %d valid tokens, got %d", want, got)
 	}
 
-	if err := DeleteToken(db, &DeleteTokenParams{
+	if _, err := DeleteToken(db, &DeleteTokenParams{
 		UserID:       id,
 		RefreshToken: "REFRESH1",
 	}); err != nil {
@@ -443,7 +443,7 @@ func TestDeleteValid(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := DeleteToken(db, &DeleteTokenParams{
+	if _, err := DeleteToken(db, &DeleteTokenParams{
 		UserID:      id,
 		AccessToken: "ACCESS1",
 	}); err != nil && err != ErrNoRowsAffected {
@@ -463,7 +463,7 @@ func TestDeleteValid(t *testing.T) {
 		t.Fatalf("expected %d valid tokens, got %d. Valid token should not be deleted with DeleteUnexpired=false", want, got)
 	}
 
-	if err := DeleteToken(db, &DeleteTokenParams{
+	if _, err := DeleteToken(db, &DeleteTokenParams{
 		UserID:          id,
 		AccessToken:     "ACCESS1",
 		DeleteUnexpired: true,
