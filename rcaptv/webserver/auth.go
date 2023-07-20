@@ -27,9 +27,6 @@ func UserID(c *fiber.Ctx) int64 {
 	return 0
 }
 
-// Token collector service (3d?)
-// webapp (redirect everything to / except /login, etc)
-
 func (sv *WebServer) WithAuth(c *fiber.Ctx) error {
 	creds := cookie.Fiber(c, cookie.CredentialsCookie)
 	if creds.IsEmpty() {

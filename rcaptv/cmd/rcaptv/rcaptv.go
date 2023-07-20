@@ -88,6 +88,8 @@ func main() {
 	}))
 	app.Use(logger.Fiber())
 
+	// TODO: webapp: redirect everything to / except /login, /auth
+	// TODO: webapp: proxy
 	rcapApi := api.New(api.APIOpts{
 		Storage:                 sto,
 		ClipsMaxPeriodDiffHours: cfg.ClipsMaxPeriodDiffHours,
