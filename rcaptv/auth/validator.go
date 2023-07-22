@@ -96,6 +96,9 @@ func (v *TokenValidator) Run() error {
 				if allInvalid {
 					// we only are interested in keep validating active users
 					v.RemoveUser(usrid)
+					if !cfg.IsProd {
+						l.Debug().Msgf("validator: removed usrid:%s", idstr)
+					}
 				}
 			}
 
