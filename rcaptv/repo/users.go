@@ -5,12 +5,16 @@ import (
 	"time"
 
 	. "github.com/go-jet/jet/v2/postgres"
+
 	"pedro.to/rcaptv/gen/tracker/public/model"
 	tbl "pedro.to/rcaptv/gen/tracker/public/table"
 	"pedro.to/rcaptv/helix"
 )
 
 func UpsertUser(db *sql.DB, user *helix.User) (int64, error) {
+	if user.BroadcasterType == "" {
+		user.BroadcasterType = "none"
+	}
 	stmt := tbl.Users.INSERT(
 		tbl.Users.TwitchUserID, tbl.Users.Username,
 		tbl.Users.DisplayUsername, tbl.Users.Email, tbl.Users.PpURL,
@@ -64,4 +68,27 @@ func User(db *sql.DB, p UserQueryParams) (*model.Users, error) {
 
 	var u model.Users
 	return &u, stmt.Query(db, &u)
+}
+
+// ActiveUsers return users that have non-expired tokens
+func ActiveUsers(db *sql.DB) ([]*model.Users, error) {
+	nowPlus10s := time.Now().Add(10 * time.Second)
+	stmt := SELECT(
+		tbl.Users.AllColumns,
+	).
+		DISTINCT(tbl.Users.UserID).
+		FROM(
+			tbl.Users.INNER_JOIN(
+				tbl.TokenPairs,
+				tbl.TokenPairs.UserID.EQ(tbl.Users.UserID),
+			),
+		).
+		WHERE(
+			tbl.TokenPairs.ExpiresAt.GT(TimestampT(nowPlus10s)),
+		)
+	var r []*model.Users
+	if err := stmt.Query(db, &r); err != nil {
+		return nil, err
+	}
+	return r, nil
 }
