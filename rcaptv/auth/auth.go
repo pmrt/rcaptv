@@ -254,12 +254,13 @@ func (p *Passport) ValidateSession(c *fiber.Ctx) error {
 	}()
 
 	creds := cookie.Fiber(c, cookie.CredentialsCookie)
-	if creds.ValidShape() {
+	if !creds.ValidShape() {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 	id := creds.GetInt64(cookie.UserId)
 	at := creds.Get(cookie.AccessToken)
 	if !creds.Expired() && repo.ValidToken(p.db, id, at) {
+		// skip further validation if the token is still in the db
 		return c.SendStatus(fiber.StatusOK)
 	}
 	// try to get user with invalid access token and current context with
