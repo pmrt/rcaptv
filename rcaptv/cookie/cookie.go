@@ -75,8 +75,29 @@ func (c *Cookie) String() string {
 	return c.claims.Encode()
 }
 
-func (c *Cookie) IsEmpty() bool {
+func (c *Cookie) Empty() bool {
 	return c.String() == ""
+}
+
+func (c *Cookie) Valid() bool {
+	return c.ValidShape() && !c.Expired()
+}
+
+func (c *Cookie) ValidShape() bool {
+	return !c.Empty() && !c.EmptyUser()
+}
+
+func (c *Cookie) EmptyUser() bool {
+	return c.GetInt64(UserId) == 0
+}
+
+func (c *Cookie) Expired() bool {
+	now := time.Now()
+	exp := c.GetTime(Expiry)
+	if !exp.IsZero() && exp.Add(10*time.Second).After(now) {
+		return false
+	}
+	return true
 }
 
 func FromString(cookie string) *Cookie {

@@ -1,4 +1,4 @@
-package webserver
+package auth
 
 import (
 	"context"
@@ -37,7 +37,17 @@ func (v *TokenValidator) Reset() {
 func (v *TokenValidator) Run() error {
 	v.Reset()
 	l := log.With().Str("ctx", "token_validator").Logger()
-	l.Info().Msgf("initializing token validator (cycle:1h, estimated_active_users:%d)", v.balancer.EstimatedObjects())
+	l.Info().Msgf("initializing token validator (cycle:%dmin estimated_active_users:%d)", cycleSize, v.balancer.EstimatedObjects())
+	l.Info().Msg("validator: retrieving current active users")
+	usrs, err := repo.ActiveUsers(v.db)
+	if err != nil {
+		l.Panic().Msg(err.Error())
+	}
+	for _, usr := range usrs {
+		v.AddUser(int64(usr.UserID))
+	}
+	l.Info().Msgf("validator: added:%d", len(usrs))
+
 	v.balancer.Start()
 	for {
 		select {
@@ -48,6 +58,10 @@ func (v *TokenValidator) Run() error {
 				if err != nil {
 					l.Err(err).Msgf("validator: error while parsing usrid:%s. conv string -> int64 failed (%s)", idstr, err.Error())
 					continue
+				}
+
+				if !cfg.IsProd {
+					l.Debug().Msgf("validator: validate usrid:%s", idstr)
 				}
 
 				tks, err := repo.TokenPair(v.db, repo.TokenPairParams{
@@ -107,7 +121,9 @@ func NewTokenValidator(db *sql.DB, hx *helix.Helix) *TokenValidator {
 		balancer: scheduler.New(scheduler.BalancedScheduleOpts{
 			CycleSize:        cycleSize,
 			EstimatedObjects: uint(cfg.EstimatedActiveUsers),
+			BalanceStrategy:  scheduler.StrategyMurmur(uint32(cycleSize)),
 			Freq:             freq,
+			Salt:             cfg.BalancerSalt,
 		}),
 		db: db,
 		hx: hx,

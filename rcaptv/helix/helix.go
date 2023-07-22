@@ -290,10 +290,6 @@ func (hx *Helix) doAtMost(req *http.Request, attemptsLeft int) (*HttpResponse, e
 		Str("endpoint", req.URL.Path).
 		Logger()
 
-	l.Info().Msgf("%s: %s %s (attempts:%d)",
-		req.Method, req.URL.Path, req.URL.RawQuery, attempts,
-	)
-
 	c := hx.defaultClient
 	if hx.useUserTokens {
 		ts, ok := ctx.Value(CtxHelixTokenSource).(oauth2.TokenSource)
@@ -305,8 +301,14 @@ func (hx *Helix) doAtMost(req *http.Request, attemptsLeft int) (*HttpResponse, e
 	}
 	resp, err := c.Do(req)
 	if err != nil {
+		l.Info().Msgf("%s-> %s %s (attempts:%d) <- ('%s')",
+			req.Method, req.URL.Path, req.URL.RawQuery, attempts, err.Error(),
+		)
 		return nil, err
 	}
+	l.Info().Msgf("%s-> %s %s (attempts:%d) <- %d",
+		req.Method, req.URL.Path, req.URL.RawQuery, attempts, resp.StatusCode,
+	)
 	defer resp.Body.Close()
 	r := io.LimitReader(resp.Body, HttpMaxClientResponseReadLimitBytes)
 	body, err := ioutil.ReadAll(r)
@@ -379,7 +381,7 @@ func (hx *Helix) HandleRevocation(cb func(evt *WebhookRevokePayload)) {
 }
 
 func parseRespDate(date string) (time.Time, error) {
-	return time.Parse(time.RFC1123, date)
+	return time.Parse(http.TimeFormat, date)
 }
 
 // untilRatelimitReset takes a reset unix timestamp and request timestamp and returns

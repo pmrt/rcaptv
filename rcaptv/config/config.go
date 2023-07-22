@@ -46,23 +46,28 @@ var (
 
 	SkipMigrations bool
 
-	Domain                  string
-	BaseURL                 string
-	HealthEndpoint          string
-	LoginEndpoint           string
-	AuthEndpoint            string
-	AuthRedirectEndpoint    string
-	APIEndpoint             string
-	APIValidateEndpoint     string
-	APIVodsEndpoint         string
-	APIClipsEndpoint        string
-	CookieSecret            string
-	TwitchAPIUrl            string
-	APIPort                 string
-	EventSubEndpoint        string
-	RateLimitMaxConns       int
-	RateLimitExpSeconds     int
-	ClipsMaxPeriodDiffHours int
+	Domain                       string
+	APIDomain                    string
+	BaseURL                      string
+	HealthEndpoint               string
+	LoginEndpoint                string
+	AuthEndpoint                 string
+	AuthRedirectEndpoint         string
+	APIEndpoint                  string
+	APIHelixEndpoint             string
+	APIValidateEndpoint          string
+	APIVodsEndpoint              string
+	APIClipsEndpoint             string
+	CookieSecret                 string
+	TwitchAPIUrl                 string
+	WebserverPort                string
+	APIPort                      string
+	EventSubEndpoint             string
+	APIRateLimitMaxConns         int
+	APIRateLimitExpSeconds       int
+	WebserverRateLimitMaxConns   int
+	WebserverRateLimitExpSeconds int
+	ClipsMaxPeriodDiffHours      int
 
 	TrackingCycleMinutes     int
 	ClipTrackingWindowHours  int
@@ -72,7 +77,14 @@ var (
 
 	EstimatedActiveUsers int
 
-	TrackIntervalMinutes int
+	TrackIntervalMinutes        int
+	TokenCollectorIntervalHours int
+
+	WebserverViewsDir  string
+	WebserverStaticDir string
+	WebserverIndexDir  string
+
+	BalancerSalt string
 
 	Debug bool
 )
@@ -85,8 +97,15 @@ func OAuthConfig() *oauth2.Config {
 		ClientSecret: HelixClientSecret,
 		Scopes:       Scopes,
 		Endpoint:     twitch.Endpoint,
-		RedirectURL:  fmt.Sprintf("%s:%s%s%s", BaseURL, APIPort, AuthEndpoint, AuthRedirectEndpoint),
+		RedirectURL:  fmt.Sprintf("%s:%s%s%s", BaseURL, WebserverPort, AuthEndpoint, AuthRedirectEndpoint),
 	}
+}
+
+func Origins() []string {
+	if IsProd {
+		return []string{"https://" + Domain, "https://" + APIDomain}
+	}
+	return []string{"http://localhost", "http://localhost:" + WebserverPort, "http://localhost:" + APIPort}
 }
 
 type SupportStringconv interface {
@@ -187,11 +206,14 @@ func LoadVars() {
 	SkipMigrations = Env("SKIP_MIGRATIONS", false)
 
 	Domain = Env("DOMAIN", "localhost")
+	APIDomain = Env("API_DOMAIN", "localhost")
 	BaseURL = Env("BASE_URL", "http://localhost")
+	WebserverPort = Env("WEBSERVER_PORT", "8081")
 	APIPort = Env("API_PORT", "8080")
 	HealthEndpoint = Env("HEALTH_ENDPOINT", "/health")
 	LoginEndpoint = Env("LOGIN_ENDPOINT", "/login")
 	APIEndpoint = Env("API_ENDPOINT", "/api/v1")
+	APIHelixEndpoint = Env("API_HELIX_ENDPOINT", "/hx")
 	APIValidateEndpoint = Env("API_VALIDATE_ENDPOINT", "/validate")
 	APIVodsEndpoint = Env("API_VODS_ENDPOINT", "/vods")
 	APIClipsEndpoint = Env("API_CLIPS_ENDPOINT", "/clips")
@@ -200,8 +222,10 @@ func LoadVars() {
 	CookieSecret = Env("COOKIE_SECRET", "unsafe_secret")
 	TwitchAPIUrl = Env("TWITCH_API_URL", "https://api.twitch.tv/helix")
 	EventSubEndpoint = Env("EVENTSUB_ENDPOINT", "/eventsub")
-	RateLimitMaxConns = Env("RATE_LIMIT_MAX_CONNS", 20)
-	RateLimitExpSeconds = Env("RATE_LIMIT_EXP_SECONDS", 60)
+	APIRateLimitMaxConns = Env("API_RATE_LIMIT_MAX_CONNS", 20)
+	APIRateLimitExpSeconds = Env("API_RATE_LIMIT_EXP_SECONDS", 60)
+	WebserverRateLimitMaxConns = Env("WEBSERVER_RATE_LIMIT_MAX_CONNS", 20)
+	WebserverRateLimitExpSeconds = Env("WEBSERVER_RATE_LIMIT_EXP_SECONDS", 60)
 	ClipsMaxPeriodDiffHours = Env("CLIPS_MAX_PERIOD_DIFF_HOURS", 168)
 
 	TrackingCycleMinutes = Env("TRACKING_CYCLE_MINUTES", 720)
@@ -211,6 +235,14 @@ func LoadVars() {
 	ClipViewWindowSize = Env("CLIP_VIEW_WINDOW_SIZE", 4)
 
 	EstimatedActiveUsers = Env("ESTIMATED_ACTIVE_USERS", 200)
+
+	TokenCollectorIntervalHours = Env("TOKEN_COLLECTOR_INTERVAL_HOURS", 72)
+
+	WebserverViewsDir = Env("WEBSERVER_VIEWS_DIR", "./views")
+	WebserverStaticDir = Env("WEBSERVER_STATIC_DIR", "./www")
+	WebserverIndexDir = Env("WEBSERVER_INDEX_PATH", "./www/index.html")
+
+	BalancerSalt = Env("BALANCER_SALT", "fake_salt")
 
 	Debug = Env("DEBUG", false)
 	logger.SetLevel(Env("LOG_LEVEL", int8(zerolog.InfoLevel)))

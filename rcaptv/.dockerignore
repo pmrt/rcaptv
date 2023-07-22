@@ -1,1 +1,8 @@
 .volumes
+.git
+.github
+.vscode
+.dockerignore
+.gitignore
+.env
+.DS_Store

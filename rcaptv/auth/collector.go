@@ -1,4 +1,4 @@
-package webserver
+package auth
 
 import (
 	"context"
@@ -29,7 +29,7 @@ func (tc *TokenCollector) Run() {
 	ticker := time.NewTicker(tc.freq)
 	defer ticker.Stop()
 
-	l.Info().Msg("initializing token collector")
+	l.Info().Msgf("initializing token collector (cycle:%.0fmin)", tc.freq.Minutes())
 	var (
 		err error
 		n   int64

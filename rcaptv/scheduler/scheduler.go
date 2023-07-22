@@ -111,6 +111,9 @@ type BalancedScheduleOpts struct {
 	// load distribution, deterministic key assignment. Objects are guarantee
 	// to have the same min assigned as long as the cycle size is the same
 	BalanceStrategy KeyBalancer
+
+	// Salt to be appended to keys.
+	Salt string
 }
 
 type RealTimeMinute struct {
@@ -190,6 +193,7 @@ type BalancedSchedule struct {
 	cancelRealTime chan struct{}
 	ctx            context.Context
 	cancel         context.CancelFunc
+	salt           string
 
 	opts BalancedScheduleOpts
 }
@@ -214,8 +218,11 @@ func (bs *BalancedSchedule) Pick(min Minute) []string {
 	return bs.internal.Pick(min)
 }
 
-func (bs *BalancedSchedule) BalancedMin(streamer string) Minute {
-	return bs.opts.BalanceStrategy.Key(streamer)
+func (bs *BalancedSchedule) BalancedMin(key string) Minute {
+	if bs.salt != "" {
+		return bs.opts.BalanceStrategy.Key(key + bs.salt)
+	}
+	return bs.opts.BalanceStrategy.Key(key)
 }
 
 func (bs *BalancedSchedule) RealTime() <-chan RealTimeMinute {
@@ -307,6 +314,7 @@ func New(opts BalancedScheduleOpts) *BalancedSchedule {
 			keyToMin: make(KeyToMinuteMap),
 		},
 		realTime: make(chan RealTimeMinute),
+		salt:     opts.Salt,
 	}
 	return bs
 }

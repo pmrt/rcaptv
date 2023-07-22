@@ -351,7 +351,7 @@ func TestHelixRateLimitedResiliency(t *testing.T) {
 			attempts++
 			now := time.Now()
 			resp.Header().Set("Ratelimit-Reset", fmt.Sprint(now.Add(resetAfter).Unix()))
-			resp.Header().Set("Date", now.Format(time.RFC1123))
+			resp.Header().Set("Date", now.UTC().Format(http.TimeFormat))
 			resp.WriteHeader(http.StatusTooManyRequests)
 		}
 	}))

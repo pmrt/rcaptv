@@ -75,6 +75,7 @@ func (t *Tracker) Run() error {
 	bs := scheduler.New(scheduler.BalancedScheduleOpts{
 		CycleSize:        uint(t.TrackingCycleMinutes),
 		EstimatedObjects: uint(lenbc),
+		Salt:             cfg.BalancerSalt,
 	})
 	for _, streamer := range streamers {
 		bs.Add(streamer.BcID)

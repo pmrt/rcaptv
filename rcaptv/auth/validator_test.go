@@ -1,4 +1,4 @@
-package webserver
+package auth
 
 import (
 	"context"
