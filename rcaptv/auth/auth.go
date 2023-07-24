@@ -267,7 +267,7 @@ func (p *Passport) ValidateSession(c *fiber.Ctx) error {
 	// tokenSource. If refresh token is still valid this should work, we would
 	// get the user and update both: the user and the token
 	resp, err := p.hx.User(&helix.UserParams{
-		Context: c.Context(),
+		Context: c.UserContext(),
 	})
 	if err != nil {
 		if errors.Is(err, helix.ErrUnauthorized) {
