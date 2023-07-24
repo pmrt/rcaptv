@@ -43,7 +43,9 @@ func (tc *TokenCollector) Run() {
 			return
 		case <-ticker.C:
 			if n, err = tc.Collect(); err != nil {
-				l.Err(err).Msgf("token collector: could not collect tokens, '%s'", err.Error())
+				if err != repo.ErrNoRowsAffected {
+					l.Err(err).Msgf("token collector: could not collect tokens, '%s'", err.Error())
+				}
 			}
 			tc.lastCollected = n
 			l.Info().Msgf("token collector: collected:%d", n)
