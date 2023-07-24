@@ -87,7 +87,7 @@ func (sv *WebServer) newServer() *fiber.App {
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     origins,
 		AllowMethods:     "GET, POST, OPTIONS",
-		AllowHeaders:     "Origin, Content-Type, Accept",
+		AllowHeaders:     "Origin, Content-Type, Accept, Accept-Language",
 		AllowCredentials: true,
 	}))
 
@@ -96,6 +96,7 @@ func (sv *WebServer) newServer() *fiber.App {
 		return c.Status(http.StatusOK).Send([]byte("ok"))
 	})
 	app.Get(cfg.LoginEndpoint, sv.auth.Login)
+	app.Get(cfg.LogoutEndpoint, sv.auth.Logout)
 	auth := app.Group(cfg.AuthEndpoint)
 	auth.Get(cfg.AuthRedirectEndpoint, sv.auth.Callback)
 	l.Info().Msgf("websv health: %s", cfg.HealthEndpoint)

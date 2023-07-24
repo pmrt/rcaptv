@@ -78,7 +78,35 @@ func TestSetSessionCookies(t *testing.T) {
 	}
 }
 
+func TestValidateSessionInvalidShape(t *testing.T) {
+	t.Parallel()
+
+	p := &Passport{}
+	app := fiber.New()
+	app.Get("/validate", p.ValidateSession)
+
+	req, err := http.NewRequest("GET", "/validate", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Cookie", "credentials=a=ACCESS&e=2015-05-02T10%3A00%3A00Z&r=REFRESH&u=0; expires=Thu, 14 Jul 2033 18:13:59 GMT; path=/; HttpOnly; secure; SameSite=Lax; user=bc_type=&display_name=test&login=test&profile_picture=https%3A%2F%2Fpictureexample.com&twitch_id=100000; expires=Thu, 14 Jul 2033 18:13:59 GMT; path=/; secure; SameSite=Lax")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resetCookies := resp.Header.Values("Set-Cookie")
+	if len(resetCookies) != 2 {
+		t.Fatalf("expected 2 Set-Cookie headers to reset cookie, got:%d", len(resetCookies))
+	}
+
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("expected 401, got:%d", resp.StatusCode)
+	}
+}
+
 func TestLoginEmptyCookie(t *testing.T) {
+	t.Parallel()
 	redirectURL := "http://fakeredirect.com"
 	secretText := "fakesecret"
 	scope := "read:user:email"
@@ -94,7 +122,7 @@ func TestLoginEmptyCookie(t *testing.T) {
 	}
 
 	p := &Passport{
-		db: db,
+		db: nil,
 		oAuthConfig: &oauth2.Config{
 			ClientID:     "",
 			ClientSecret: "",

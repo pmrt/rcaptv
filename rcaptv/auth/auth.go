@@ -21,6 +21,8 @@ import (
 	"pedro.to/rcaptv/repo"
 )
 
+var ExpiredCookieExpiry = time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
+
 // Services handles related webserver services.
 //
 // IMPORTANT: Services must not be copied
@@ -78,7 +80,10 @@ func (p *Passport) Stop() {
 
 type CtxKeyAPI int
 
-const CtxKeyUserID CtxKeyAPI = iota
+const (
+	CtxKeyUserID CtxKeyAPI = iota
+	CtxKeyToken
+)
 
 func UserID(c *fiber.Ctx) int64 {
 	if v, ok := c.UserContext().Value(CtxKeyUserID).(int64); ok {
@@ -135,8 +140,9 @@ func (p *Passport) WithAuth(c *fiber.Ctx) error {
 			return p.onTokenRefresh(c, t)
 		},
 	})
-	// make user id available too in the request stack
+	// make user id and token pair available too in the request stack
 	ctx = context.WithValue(ctx, CtxKeyUserID, creds.GetInt64(cookie.UserId))
+	ctx = context.WithValue(ctx, CtxKeyToken, t)
 	c.SetUserContext(ctx)
 	return c.Next()
 }
@@ -234,8 +240,45 @@ func (p *Passport) setSessionCookies(c *fiber.Ctx, params SessionCookiesParams) 
 }
 
 func ClearAuthCookies(c *fiber.Ctx) {
-	c.ClearCookie(cookie.CredentialsCookie)
-	c.ClearCookie(cookie.UserCookie)
+	// some browsers requires same attributes that when created
+	c.Cookie(&fiber.Cookie{
+		Name:     cookie.CredentialsCookie,
+		Value:    "deleted",
+		Path:     "/",
+		Expires:  ExpiredCookieExpiry,
+		Domain:   cfg.Domain,
+		SameSite: "Lax",
+		HTTPOnly: true,
+		Secure:   true,
+	})
+	c.Cookie(&fiber.Cookie{
+		Name:     cookie.UserCookie,
+		Value:    "{}",
+		Path:     "/",
+		Expires:  ExpiredCookieExpiry,
+		Domain:   cfg.Domain,
+		SameSite: "Lax",
+		HTTPOnly: false,
+		Secure:   true,
+	})
+}
+
+func ClearAuthorizationCodeCookies(c *fiber.Ctx) {
+	c.Cookie(&fiber.Cookie{
+		Name:     cookie.OauthStateCookie,
+		Value:    "deleted",
+		Expires:  ExpiredCookieExpiry,
+		Path:     cfg.AuthEndpoint,
+		Domain:   cfg.Domain,
+		SameSite: "Lax",
+		HTTPOnly: true,
+		Secure:   true,
+	})
+}
+
+func ClearAllCookies(c *fiber.Ctx) {
+	ClearAuthCookies(c)
+	ClearAuthorizationCodeCookies(c)
 }
 
 // ValidateSession is and endpoint to be invoked from time to time, generally
@@ -247,14 +290,9 @@ func ClearAuthCookies(c *fiber.Ctx) {
 // It assumes that the UserID and tokenSource is already in the request context,
 // so call it after the WithAuth middleware.
 func (p *Passport) ValidateSession(c *fiber.Ctx) error {
-	defer func() {
-		if c.Response().StatusCode() == fiber.StatusUnauthorized {
-			ClearAuthCookies(c)
-		}
-	}()
-
 	creds := cookie.Fiber(c, cookie.CredentialsCookie)
 	if !creds.ValidShape() {
+		ClearAuthCookies(c)
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 	id := creds.GetInt64(cookie.UserId)
@@ -274,6 +312,7 @@ func (p *Passport) ValidateSession(c *fiber.Ctx) error {
 			// refresh token failed. Maybe twitch revoked it or user disconnected
 			// our app. Clear cookies. The token collector will get rid of the
 			// expired tokens in the database
+			ClearAuthCookies(c)
 			return c.SendStatus(fiber.StatusUnauthorized)
 		}
 		return c.SendStatus(fiber.StatusInternalServerError)
@@ -369,11 +408,6 @@ func (p *Passport) Login(c *fiber.Ctx) error {
 }
 
 func (p *Passport) Callback(c *fiber.Ctx) error {
-	defer func() {
-		// whatever happens, clear the state cookie
-		c.ClearCookie(cookie.OauthStateCookie)
-	}()
-
 	state := c.Cookies(cookie.OauthStateCookie)
 	if state == "" {
 		return c.Status(fiber.StatusBadRequest).SendString("missing state challenge")
@@ -383,15 +417,19 @@ func (p *Passport) Callback(c *fiber.Ctx) error {
 	}
 	queryErr := c.Query("error")
 	if queryErr == "access_denied" {
+		ClearAuthorizationCodeCookies(c)
 		return c.Render("access_denied", nil)
 	} else if queryErr == "redirect_mismatch" {
+		ClearAuthorizationCodeCookies(c)
 		return c.Status(fiber.StatusInternalServerError).SendString("invalid redirect")
 	} else if queryErr != "" {
+		ClearAuthorizationCodeCookies(c)
 		return c.Status(fiber.StatusInternalServerError).SendString("invalid authorization")
 	}
 
 	tk, err := p.oAuthConfig.Exchange(context.Background(), c.Query("code"))
 	if err != nil {
+		ClearAuthorizationCodeCookies(c)
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 
@@ -404,12 +442,39 @@ func (p *Passport) Callback(c *fiber.Ctx) error {
 		Context: ctx,
 	})
 	if err != nil || len(resp.Data) != 1 {
+		ClearAuthorizationCodeCookies(c)
 		return c.Status(fiber.StatusInternalServerError).SendString("invalid user")
 	}
 	if err := p.upsertUser(c, &resp.Data[0], tk); err != nil {
-		ClearAuthCookies(c)
+		ClearAllCookies(c)
 		return c.Status(fiber.StatusInternalServerError).SendString("failed to create user")
 	}
+	return c.Redirect("/", fiber.StatusTemporaryRedirect)
+}
+
+func (p *Passport) Logout(c *fiber.Ctx) error {
+	id := UserID(c)
+	if id == 0 {
+		return c.Redirect("/", fiber.StatusTemporaryRedirect)
+	}
+	t, ok := c.UserContext().Value(CtxKeyToken).(*oauth2.Token)
+	if !ok {
+		return c.Redirect("/", fiber.StatusTemporaryRedirect)
+	}
+
+	params := &repo.DeleteTokenParams{
+		UserID:          id,
+		DeleteUnexpired: true,
+		RefreshToken:    t.RefreshToken,
+	}
+	// ?all=1 -> Remove all tokens for the user
+	if c.Query("all") == "1" {
+		params.RefreshToken = ""
+	}
+	if _, err := repo.DeleteToken(p.db, params); err != nil {
+		return c.Redirect("/", fiber.StatusTemporaryRedirect)
+	}
+	ClearAllCookies(c)
 	return c.Redirect("/", fiber.StatusTemporaryRedirect)
 }
 

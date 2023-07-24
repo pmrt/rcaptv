@@ -51,6 +51,7 @@ var (
 	BaseURL                      string
 	HealthEndpoint               string
 	LoginEndpoint                string
+	LogoutEndpoint               string
 	AuthEndpoint                 string
 	AuthRedirectEndpoint         string
 	APIEndpoint                  string
@@ -212,6 +213,7 @@ func LoadVars() {
 	APIPort = Env("API_PORT", "8080")
 	HealthEndpoint = Env("HEALTH_ENDPOINT", "/health")
 	LoginEndpoint = Env("LOGIN_ENDPOINT", "/login")
+	LogoutEndpoint = Env("LOGOUT_ENDPOINT", "/logout")
 	APIEndpoint = Env("API_ENDPOINT", "/api/v1")
 	APIHelixEndpoint = Env("API_HELIX_ENDPOINT", "/hx")
 	APIValidateEndpoint = Env("API_VALIDATE_ENDPOINT", "/validate")
