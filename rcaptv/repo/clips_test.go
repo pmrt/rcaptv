@@ -2,11 +2,14 @@ package repo
 
 import (
 	"testing"
+	"time"
 
 	"pedro.to/rcaptv/helix"
 )
 
-func TestUpsertClips(t *testing.T) {
+func TestClipsUpsert(t *testing.T) {
+	defer cleanupClips()
+
 	vodOffset := 10
 	clips := []*helix.Clip{
 		{
@@ -40,8 +43,10 @@ func TestUpsertClips(t *testing.T) {
 			VODOffsetSeconds: &vodOffset,
 		},
 	}
-	UpsertClips(db, clips)
-	got, err := Clips(db)
+	if err := UpsertClips(db, clips); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Clips(db, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +94,7 @@ func TestUpsertClips(t *testing.T) {
 		},
 	}
 	UpsertClips(db, clips2)
-	got, err = Clips(db)
+	got, err = Clips(db, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,5 +127,171 @@ func TestUpsertClips(t *testing.T) {
 	}
 	if got[1].ViewCount != 1000 {
 		t.Fatalf("expected view count to be 1000, got %d", got[1].ViewCount)
+	}
+}
+
+func TestClipsSelect(t *testing.T) {
+	defer cleanupClips()
+
+	bid := "58753574"
+	vodOffset := 10
+	clips := []*helix.Clip{
+		{
+			ClipID:           "clip1",
+			BroadcasterID:    bid,
+			VideoID:          "",
+			CreatedAt:        "2023-01-01T10:00:00Z",
+			CreatorID:        "creator1",
+			CreatorName:      "John Doe",
+			Title:            "Awesome Clip",
+			GameID:           "game1",
+			Lang:             "en",
+			ThumbnailURL:     "https://example.com/thumbnail1.jpg",
+			DurationSeconds:  10.5,
+			ViewCount:        100,
+			VODOffsetSeconds: nil,
+		},
+		{
+			ClipID:           "clip2",
+			BroadcasterID:    bid,
+			VideoID:          "video1",
+			CreatedAt:        "2023-02-15T10:01:00Z",
+			CreatorID:        "creator2",
+			CreatorName:      "Jane Smith",
+			Title:            "Funny Clip",
+			GameID:           "game2",
+			Lang:             "es",
+			ThumbnailURL:     "https://example.com/thumbnail2.jpg",
+			DurationSeconds:  15.2,
+			ViewCount:        250,
+			VODOffsetSeconds: &vodOffset,
+		},
+		{
+			ClipID:           "clip3",
+			BroadcasterID:    bid,
+			VideoID:          "video2",
+			CreatedAt:        "2023-02-15T10:30:00Z",
+			CreatorID:        "creator2",
+			CreatorName:      "Jane Smith",
+			Title:            "Funny Clip",
+			GameID:           "game2",
+			Lang:             "es",
+			ThumbnailURL:     "https://example.com/thumbnail2.jpg",
+			DurationSeconds:  15.2,
+			ViewCount:        250,
+			VODOffsetSeconds: &vodOffset,
+		},
+		{
+			ClipID:           "clip4",
+			BroadcasterID:    bid,
+			VideoID:          "video3",
+			CreatedAt:        "2023-02-15T10:50:00Z",
+			CreatorID:        "creator2",
+			CreatorName:      "Jane Smith",
+			Title:            "Funny Clip",
+			GameID:           "game2",
+			Lang:             "es",
+			ThumbnailURL:     "https://example.com/thumbnail2.jpg",
+			DurationSeconds:  15.2,
+			ViewCount:        250,
+			VODOffsetSeconds: &vodOffset,
+		},
+	}
+	if err := UpsertClips(db, clips); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Clips(db, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 4 {
+		t.Fatalf("expected 4 clips (all), got:%d", len(got))
+	}
+
+	got, err = Clips(db, &ClipsParams{
+		BroadcasterID:   bid,
+		ExcludeDangling: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("expected 3 clips (with valid vod_offset), got:%d", len(got))
+	}
+
+	startedAt, err := time.Parse(time.RFC3339, "2023-02-15T10:29:00Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err = Clips(db, &ClipsParams{
+		BroadcasterID:   bid,
+		StartedAt:       startedAt,
+		ExcludeDangling: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 clips (after start_at), got:%d", len(got))
+	}
+	want := []string{"clip3", "clip4"}
+	for i, clip := range got {
+		if want[i] != clip.ClipID {
+			t.Fatalf("unexpected clipID: got:'%s', want:'%s'", clip.ClipID, want)
+		}
+	}
+
+	startedAt, err = time.Parse(time.RFC3339, "2023-02-15T10:29:00Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	endedAt, err := time.Parse(time.RFC3339, "2023-02-15T10:31:00Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err = Clips(db, &ClipsParams{
+		BroadcasterID:   bid,
+		StartedAt:       startedAt,
+		EndedAt:         endedAt,
+		ExcludeDangling: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 clips (between start_at and ended_at), got:%d", len(got))
+	}
+	want = []string{"clip3"}
+	for i, clip := range got {
+		if want[i] != clip.ClipID {
+			t.Fatalf("unexpected clipID: got:'%s', want:'%s'", clip.ClipID, want)
+		}
+	}
+
+	startedAt, err = time.Parse(time.RFC3339, "2023-02-15T09:59:00Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	endedAt, err = time.Parse(time.RFC3339, "2023-02-15T10:05:00Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err = Clips(db, &ClipsParams{
+		BroadcasterID:   bid,
+		StartedAt:       startedAt,
+		EndedAt:         endedAt,
+		ExcludeDangling: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 clips (after start_at, only with valid offset), got:%d", len(got))
+	}
+	want = []string{"clip2"}
+	for i, clip := range got {
+		if want[i] != clip.ClipID {
+			t.Fatalf("unexpected clipID: got:'%s', want:'%s'", clip.ClipID, want)
+		}
 	}
 }

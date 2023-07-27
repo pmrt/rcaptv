@@ -2,16 +2,45 @@ package repo
 
 import (
 	"database/sql"
+	"errors"
+	"time"
 
 	. "github.com/go-jet/jet/v2/postgres"
+
 	tbl "pedro.to/rcaptv/gen/tracker/public/table"
 	"pedro.to/rcaptv/helix"
 )
 
-func Clips(db *sql.DB) (r []*helix.Clip, err error) {
+type ClipsParams struct {
+	BroadcasterID string
+	StartedAt     time.Time
+	EndedAt       time.Time
+
+	// ExcludeDangling excludes clips that have no connection with vods
+	// (determined by vod_offset)
+	ExcludeDangling bool
+}
+
+func Clips(db *sql.DB, p *ClipsParams) (r []*helix.Clip, err error) {
 	stmt := SELECT(
 		tbl.Clips.AllColumns,
 	).FROM(tbl.Clips)
+	if p != nil {
+		if p.BroadcasterID == "" {
+			return nil, errors.New("empty broadcaster id")
+		}
+		where := tbl.Clips.BcID.EQ(String(p.BroadcasterID))
+		if !p.StartedAt.IsZero() {
+			where = where.AND(tbl.Clips.CreatedAt.GT(TimestampT(p.StartedAt)))
+		}
+		if !p.EndedAt.IsZero() {
+			where = where.AND(tbl.Clips.CreatedAt.LT(TimestampT(p.EndedAt)))
+		}
+		if p.ExcludeDangling {
+			where = where.AND(tbl.Clips.VodOffset.IS_NOT_NULL())
+		}
+		stmt = stmt.WHERE(where)
+	}
 
 	if err = stmt.Query(db, &r); err != nil {
 		return nil, err
