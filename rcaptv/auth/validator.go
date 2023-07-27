@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"strconv"
 	"time"
 
@@ -96,8 +95,6 @@ func (v *TokenValidator) Run() error {
 					}
 				}
 
-				fmt.Println("PROCCESING INVALID IF ANY")
-
 				if allInvalid {
 					// we only are interested in keep validating active users
 					v.RemoveUser(usrid)
@@ -106,7 +103,6 @@ func (v *TokenValidator) Run() error {
 					}
 				}
 			}
-
 			v.AfterCycle(m)
 
 		case <-v.ctx.Done():

@@ -85,6 +85,8 @@ func TestTokenValidator(t *testing.T) {
 		ValidateEndpoint: sv.URL,
 	}))
 	tv.AfterCycle = func(m scheduler.RealTimeMinute) {
+		tv.Stop()
+		t.Log("AFTER CYCLE")
 		wg.Done()
 	}
 	tv.AddUser(id)
@@ -93,7 +95,6 @@ func TestTokenValidator(t *testing.T) {
 		tv.Run()
 	}()
 	wg.Wait()
-	tv.Stop()
 
 	schedule := tv.balancer.TestSchedule()
 	keyToMin := tv.balancer.TestKeyToMinute()
@@ -136,7 +137,6 @@ func TestTokenValidator(t *testing.T) {
 		tv.Run()
 	}()
 	wg.Wait()
-	tv.Stop()
 
 	schedule = tv.balancer.TestSchedule()
 	keyToMin = tv.balancer.TestKeyToMinute()
