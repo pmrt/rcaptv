@@ -33,7 +33,8 @@ type VODParams struct {
 	StopAtVODID    string
 	OnlyMostRecent bool
 
-	Context context.Context
+	SkipDeduplication bool
+	Context           context.Context
 }
 
 type VOD struct {
@@ -123,9 +124,14 @@ func (hx *Helix) Vods(p *VODParams) ([]*VOD, error) {
 	if err != nil {
 		return nil, err
 	}
-	vods, err := DoWithPagination[*VOD](hx, req, pagFunc, func(v *VOD) string {
-		return v.VideoID
-	})
+	var dedupFn func(v *VOD) string
+	if !p.SkipDeduplication {
+		dedupFn = func(v *VOD) string {
+			return v.VideoID
+		}
+	}
+
+	vods, err := DoWithPagination[*VOD](hx, req, pagFunc, dedupFn)
 	if err != nil {
 		return nil, err
 	}

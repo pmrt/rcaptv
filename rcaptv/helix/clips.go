@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+
 	"pedro.to/rcaptv/bufop"
 )
 
@@ -29,7 +30,8 @@ type ClipsParams struct {
 	// Number of clips used to determine the threshold in a rolling window
 	ViewsThresholdWindowSize int
 
-	Context context.Context
+	SkipDeduplication bool
+	Context           context.Context
 }
 
 type Clip struct {
@@ -100,6 +102,13 @@ func (hx *Helix) Clips(p *ClipsParams) (*ClipResponse, error) {
 		p.StopViewsThreshold = 8
 	}
 
+	var dedupFn func(c *Clip) string
+	if !p.SkipDeduplication {
+		dedupFn = func(c *Clip) string {
+			return c.ClipID
+		}
+	}
+
 	bop := bufop.New(p.ViewsThresholdWindowSize)
 	t := float32(p.StopViewsThreshold)
 	stopped := false
@@ -110,9 +119,7 @@ func (hx *Helix) Clips(p *ClipsParams) (*ClipResponse, error) {
 			return true
 		}
 		return false
-	}, func(c *Clip) string {
-		return c.ClipID
-	})
+	}, dedupFn)
 	return &ClipResponse{
 		Clips:      clips,
 		IsComplete: stopped,

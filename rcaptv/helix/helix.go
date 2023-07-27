@@ -212,10 +212,14 @@ type PaginationManyObj[T any] struct {
 // processed, DoWithPagination will perform a new request using the cursor from
 // the previous one. If stopFunc() returns true while processing a element, the
 // loop will break and no more requests will be performed.
+//
+// If a deduplicateKeyFn is passed, it will deduplicate the results with the
+// key returned by the function. If deduplicateKeyFn is nil, the results will
+// be returned intact.
 func DoWithPagination[T any](
 	hx *Helix, req *http.Request,
 	stopFunc func(item T, all []T) bool,
-	keyFn func(i T) string,
+	deduplicateKeyFn func(i T) string,
 ) ([]T, error) {
 	var (
 		resp   *HttpResponse
@@ -262,7 +266,10 @@ PaginationLoop:
 		}
 		parsed = nil
 	}
-	return Deduplicate(all, keyFn), nil
+	if deduplicateKeyFn != nil {
+		return Deduplicate(all, deduplicateKeyFn), nil
+	}
+	return all, nil
 }
 
 func (hx *Helix) doAtMost(req *http.Request, attemptsLeft int) (*HttpResponse, error) {
