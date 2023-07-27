@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/oauth2"
 
@@ -15,7 +16,6 @@ import (
 )
 
 func TestSetSessionCookies(t *testing.T) {
-	t.Parallel()
 	app := fiber.New()
 
 	p := &Passport{
@@ -106,7 +106,6 @@ func TestValidateSessionInvalidShape(t *testing.T) {
 }
 
 func TestLoginEmptyCookie(t *testing.T) {
-	t.Parallel()
 	redirectURL := "http://fakeredirect.com"
 	secretText := "fakesecret"
 	scope := "read:user:email"
@@ -145,14 +144,32 @@ func TestLoginEmptyCookie(t *testing.T) {
 	if resp.StatusCode != http.StatusTemporaryRedirect {
 		t.Fatalf("expected 307, got %d", resp.StatusCode)
 	}
-	got := resp.Header.Get("Set-Cookie")
-	want := fmt.Sprintf(
+	gotHeaders := resp.Header.Values("Set-Cookie")
+	spew.Dump(gotHeaders)
+	if len(gotHeaders) != 3 {
+		t.Fatalf("expected 3 cookies, got:%d", len(gotHeaders))
+	}
+	// cleaned credentials cookie
+	got := gotHeaders[0]
+	want := "credentials=deleted; expires=Tue, 10 Nov 2009 23:00:00 GMT; path=/; HttpOnly; secure; SameSite=Lax"
+	if got != want {
+		t.Fatalf("unexpected cookie, want:'%s' got:'%s'", want, got)
+	}
+	// cleaned user cookie
+	got = gotHeaders[1]
+	want = "user={}; expires=Tue, 10 Nov 2009 23:00:00 GMT; path=/; secure; SameSite=Lax"
+	if got != want {
+		t.Fatalf("unexpected cookie, want:'%s' got:'%s'", want, got)
+	}
+	got = gotHeaders[2]
+	want = fmt.Sprintf(
 		"oauth_state=%s; expires=%s; path=/; HttpOnly; secure; SameSite=Lax",
 		secretText, timeNow().Add(30*time.Minute).UTC().Format(http.TimeFormat),
 	)
 	if got != want {
 		t.Fatalf("unexpected cookie, want:'%s' got:'%s'", want, got)
 	}
+
 	got = resp.Header.Get("Location")
 	want = fmt.Sprintf(
 		"?client_id=&redirect_uri=%s&response_type=code&scope=%s&state=%s",

@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -20,6 +21,8 @@ type TokenValidator struct {
 	hx       *helix.Helix
 	ctx      context.Context
 	cancel   context.CancelFunc
+
+	AfterCycle func(m scheduler.RealTimeMinute)
 }
 
 func (v *TokenValidator) AddUser(id int64) {
@@ -93,6 +96,8 @@ func (v *TokenValidator) Run() error {
 					}
 				}
 
+				fmt.Println("PROCCESING INVALID IF ANY")
+
 				if allInvalid {
 					// we only are interested in keep validating active users
 					v.RemoveUser(usrid)
@@ -101,6 +106,8 @@ func (v *TokenValidator) Run() error {
 					}
 				}
 			}
+
+			v.AfterCycle(m)
 
 		case <-v.ctx.Done():
 			l.Info().Msg("stopping validator")
@@ -128,7 +135,8 @@ func NewTokenValidator(db *sql.DB, hx *helix.Helix) *TokenValidator {
 			Freq:             freq,
 			Salt:             cfg.BalancerSalt,
 		}),
-		db: db,
-		hx: hx,
+		db:         db,
+		hx:         hx,
+		AfterCycle: func(m scheduler.RealTimeMinute) {},
 	}
 }

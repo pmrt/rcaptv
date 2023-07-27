@@ -84,15 +84,16 @@ func TestTokenValidator(t *testing.T) {
 		APIUrl:           "",
 		ValidateEndpoint: sv.URL,
 	}))
+	tv.AfterCycle = func(m scheduler.RealTimeMinute) {
+		wg.Done()
+	}
 	tv.AddUser(id)
 	wg.Add(1)
 	go func() {
 		tv.Run()
-		wg.Done()
 	}()
-	time.Sleep(time.Millisecond * 13)
-	tv.Stop()
 	wg.Wait()
+	tv.Stop()
 
 	schedule := tv.balancer.TestSchedule()
 	keyToMin := tv.balancer.TestKeyToMinute()
@@ -133,12 +134,9 @@ func TestTokenValidator(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		tv.Run()
-		t.Log("AFTER RUN")
-		wg.Done()
 	}()
-	time.Sleep(time.Millisecond * 13)
-	tv.Stop()
 	wg.Wait()
+	tv.Stop()
 
 	schedule = tv.balancer.TestSchedule()
 	keyToMin = tv.balancer.TestKeyToMinute()
