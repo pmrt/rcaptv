@@ -39,7 +39,7 @@ start_web:
 
 test:
 	go clean -testcache
-	go test -timeout 30s -v ./...
+	go test -timeout 30s ./...
 
 tools:
 # Jet cli for generating types for SQL
