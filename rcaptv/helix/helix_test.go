@@ -473,7 +473,7 @@ func TestHelixPagination(t *testing.T) {
 	}
 }
 
-func TestHelixiDeduplicatedPagination(t *testing.T) {
+func TestHelixDeduplicatedPagination(t *testing.T) {
 	t.Parallel()
 	clipsJson := [...][]byte{
 		[]byte(`{"data":[{"broadcaster_id":"58753574","broadcaster_name":"Zeling","created_at":"2023-06-06T13:33:59Z","creator_id":"809288340","creator_name":"NiviVT","duration":9,"embed_url":"https://clips.twitch.tv/embed?clip=CoweringDreamyOrcaGingerPower-x9zdfeI9Z8X7sVQh","game_id":"21779","id":"CoweringDreamyOrcaGingerPower-x9zdfeI9Z8X7sVQh","language":"es","thumbnail_url":"https://clips-media-assets2.twitch.tv/3MsHosfc3X3iPWfF-7FUIQ/AT-cm%7C3MsHosfc3X3iPWfF-7FUIQ-preview-480x272.jpg","title":"apagando Windows","url":"https://clips.twitch.tv/CoweringDreamyOrcaGingerPower-x9zdfeI9Z8X7sVQh","video_id":"","view_count":1000,"vod_offset":null},{"broadcaster_id":"58753574","broadcaster_name":"Zeling","created_at":"2023-06-04T11:34:53Z","creator_id":"809288340","creator_name":"NiviVT","duration":14.9,"embed_url":"https://clips.twitch.tv/embed?clip=FriendlyUninterestedLlamaTriHard-mMwqOPCPGEv0Tz3-","game_id":"21779","id":"FriendlyUninterestedLlamaTriHard-mMwqOPCPGEv0Tz3-","language":"es","thumbnail_url":"https://clips-media-assets2.twitch.tv/WP4c9ZjMKjjwjxhL9E89_g/AT-cm%7CWP4c9ZjMKjjwjxhL9E89_g-preview-480x272.jpg","title":"CUIDADO NIÑO","url":"https://clips.twitch.tv/FriendlyUninterestedLlamaTriHard-mMwqOPCPGEv0Tz3-","video_id":"","view_count":1000,"vod_offset":null},{"broadcaster_id":"58753574","broadcaster_name":"Zeling","created_at":"2023-06-04T11:45:51Z","creator_id":"574315409","creator_name":"kiseorr","duration":20.6,"embed_url":"https://clips.twitch.tv/embed?clip=GlutenFreeCourteousPineappleUncleNox-gkqWZJAxdPI5xqGw","game_id":"21779","id":"GlutenFreeCourteousPineappleUncleNox-gkqWZJAxdPI5xqGw","language":"es","thumbnail_url":"https://clips-media-assets2.twitch.tv/u_8_ToJKlmSQMXTyOcahsA/AT-cm%7Cu_8_ToJKlmSQMXTyOcahsA-preview-480x272.jpg","title":"KEK","url":"https://clips.twitch.tv/GlutenFreeCourteousPineappleUncleNox-gkqWZJAxdPI5xqGw","video_id":"","view_count":1000,"vod_offset":null}],"pagination":{"cursor":"eyJiIjpudWxsLCJhIjp7IkN1cnNvciI6Ik9BPT0ifX0"}}`),
@@ -511,11 +511,23 @@ func TestHelixiDeduplicatedPagination(t *testing.T) {
 		BroadcasterID:            "58753574",
 		StopViewsThreshold:       8,
 		ViewsThresholdWindowSize: 3,
+		SkipDeduplication:        true,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(clipsResp.Clips) != 8 {
+		t.Fatalf("expected 8 clips with SkipDeduplication=true, got:%d", len(clipsResp.Clips))
+	}
 
+	clipsResp, err = hx.Clips(&ClipsParams{
+		BroadcasterID:            "58753574",
+		StopViewsThreshold:       8,
+		ViewsThresholdWindowSize: 3,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	want := []*Clip{
 		{
 			ClipID: "CoweringDreamyOrcaGingerPower-x9zdfeI9Z8X7sVQh",
@@ -550,7 +562,7 @@ func TestHelixiDeduplicatedPagination(t *testing.T) {
 		}
 	}
 
-	if reqs != 3 {
+	if reqs != 6 {
 		t.Fatalf("expected 3 requests, got %d", reqs)
 	}
 }

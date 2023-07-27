@@ -161,6 +161,7 @@ type DeepClipsParams struct {
 // the ranges 0-84 and 84-168 hours in the corresponding time window
 func (hx *Helix) DeepClips(p *DeepClipsParams) ([]*Clip, error) {
 	p.windowHours = p.EndedAt.Sub(p.StartedAt).Hours()
+	p.SkipDeduplication = true
 	clips, err := hx.deepFetchClips(*p, 1, p.StartedAt, p.EndedAt)
 	return Deduplicate(clips, func(c *Clip) string {
 		return c.ClipID
@@ -174,6 +175,7 @@ func (hx *Helix) deepFetchClips(p DeepClipsParams, lvl int, from time.Time, to t
 		StopViewsThreshold:       p.StopViewsThreshold,
 		ViewsThresholdWindowSize: p.ViewsThresholdWindowSize,
 		Context:                  p.Context,
+		SkipDeduplication:        p.SkipDeduplication,
 		StartedAt:                from,
 		EndedAt:                  to,
 	})
