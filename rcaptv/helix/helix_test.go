@@ -10,7 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/go-test/deep"
+
+	"pedro.to/rcaptv/utils"
 )
 
 func TestRFC3339Timestamp(t *testing.T) {
@@ -202,6 +205,137 @@ func TestDeduplicate(t *testing.T) {
 			t.Log(line)
 		}
 		t.Fatal("expected values to be equal")
+	}
+}
+
+func TestDeduplicateConflict(t *testing.T) {
+	t.Parallel()
+	offset := 300
+	duplicated := []*Clip{
+		{
+			ClipID:          "FuriousTransparentWolfArsonNoSexy-w7lnpbTR8mHZQ0bN",
+			BroadcasterID:   "58753574",
+			VideoID:         "",
+			CreatedAt:       "2021-04-17T17:23:52Z",
+			CreatorID:       "412992173",
+			CreatorName:     "maxiichh",
+			DurationSeconds: 30,
+			ViewCount:       36351,
+		},
+		{
+			ClipID:          "RudeSeductiveRadishSSSsss-0_zvmvAv641XOIH5",
+			BroadcasterID:   "58753574",
+			VideoID:         "video1",
+			CreatedAt:       "2021-05-02T14:35:55Z",
+			CreatorID:       "484298161",
+			CreatorName:     "mintyu0",
+			DurationSeconds: 30,
+			ViewCount:       200,
+		},
+		{
+			ClipID:          "RudeSeductiveRadishSSSsss-0_zvmvAv641XOIH5",
+			BroadcasterID:   "58753574",
+			VideoID:         "",
+			CreatedAt:       "2021-05-02T14:35:55Z",
+			CreatorID:       "484298161",
+			CreatorName:     "mintyu0",
+			DurationSeconds: 30,
+			ViewCount:       1,
+		},
+		{
+			ClipID:          "TastyAgitatedDiscNinjaGrumpy",
+			BroadcasterID:   "58753574",
+			VideoID:         "",
+			CreatedAt:       "2020-11-30T15:40:46Z",
+			CreatorID:       "97024063",
+			CreatorName:     "AleMagnoCA",
+			DurationSeconds: 7,
+			ViewCount:       20295,
+		},
+		{
+			ClipID:           "TrustworthyEphemeralDunlinCharlietheUnicorn",
+			BroadcasterID:    "58753574",
+			VideoID:          "",
+			CreatedAt:        "2021-01-14T16:54:11Z",
+			CreatorID:        "190546482",
+			CreatorName:      "F0RCE______",
+			DurationSeconds:  59,
+			ViewCount:        10,
+			VODOffsetSeconds: &offset,
+		},
+		{
+			ClipID:          "TrustworthyEphemeralDunlinCharlietheUnicorn",
+			BroadcasterID:   "58753574",
+			VideoID:         "video2",
+			CreatedAt:       "2021-01-14T16:54:11Z",
+			CreatorID:       "190546482",
+			CreatorName:     "F0RCE______",
+			DurationSeconds: 59,
+			ViewCount:       2000,
+		},
+	}
+	clips := Deduplicate(duplicated,
+		func(c *Clip) string {
+			return c.ClipID
+		},
+		func(a *Clip, b *Clip) *Clip {
+			a.VODOffsetSeconds = utils.Coalesce(a.VODOffsetSeconds, b.VODOffsetSeconds)
+			a.VideoID = utils.CoalesceString(a.VideoID, b.VideoID)
+			a.ViewCount = utils.Max(a.ViewCount, b.ViewCount)
+			return a
+		},
+	)
+	want := []*Clip{
+		{
+			ClipID:          "FuriousTransparentWolfArsonNoSexy-w7lnpbTR8mHZQ0bN",
+			BroadcasterID:   "58753574",
+			VideoID:         "",
+			CreatedAt:       "2021-04-17T17:23:52Z",
+			CreatorID:       "412992173",
+			CreatorName:     "maxiichh",
+			DurationSeconds: 30,
+			ViewCount:       36351,
+		},
+		{
+			ClipID:          "RudeSeductiveRadishSSSsss-0_zvmvAv641XOIH5",
+			BroadcasterID:   "58753574",
+			VideoID:         "video1",
+			CreatedAt:       "2021-05-02T14:35:55Z",
+			CreatorID:       "484298161",
+			CreatorName:     "mintyu0",
+			DurationSeconds: 30,
+			ViewCount:       200,
+		},
+		{
+			ClipID:          "TastyAgitatedDiscNinjaGrumpy",
+			BroadcasterID:   "58753574",
+			VideoID:         "",
+			CreatedAt:       "2020-11-30T15:40:46Z",
+			CreatorID:       "97024063",
+			CreatorName:     "AleMagnoCA",
+			DurationSeconds: 7,
+			ViewCount:       20295,
+		},
+		{
+			ClipID:           "TrustworthyEphemeralDunlinCharlietheUnicorn",
+			BroadcasterID:    "58753574",
+			VideoID:          "video2",
+			CreatedAt:        "2021-01-14T16:54:11Z",
+			CreatorID:        "190546482",
+			CreatorName:      "F0RCE______",
+			DurationSeconds:  59,
+			ViewCount:        2000,
+			VODOffsetSeconds: &offset,
+		},
+	}
+
+	spew.Dump(clips)
+	if len(clips) != 4 {
+		t.Fatalf("expected 4 clips, got %d", len(clips))
+	}
+
+	if diff := deep.Equal(clips, want); diff != nil {
+		t.Fatal(diff)
 	}
 }
 

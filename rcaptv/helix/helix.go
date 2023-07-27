@@ -453,17 +453,34 @@ func NewWithoutExchange(opts *HelixOpts, c ...*http.Client) *Helix {
 	return hx
 }
 
-func Deduplicate[T any](s []T, keyFn func(i T) string) []T {
+// Deduplicate s with the given key computed by keyFn.
+//
+// If a conflictFn(a, b) is passsed, when the keys of two objects a, b are
+// equal, the function will be invoked, the object in the result will be
+// updated to the one returned by the conflictFn.
+func Deduplicate[T any](s []T, keyFn func(i T) string, conflictFn ...func(a T, b T) T) []T {
 	r := make([]T, 0, len(s))
-	ht := map[string]bool{}
+	ht := make(map[string]int, len(s))
+	conflict := func(a T, b T) T {
+		return a
+	}
+	if len(conflictFn) > 0 {
+		conflict = conflictFn[0]
+	}
+
 	for _, item := range s {
-		if k := keyFn(item); !ht[k] {
+		k := keyFn(item)
+		if idx, ok := ht[k]; ok {
+			r[idx] = conflict(r[idx], item)
+		} else {
 			r = append(r, item)
-			ht[k] = true
+			ht[k] = len(r) - 1
 		}
 	}
 	return r
 }
+
+// TODO: test new deduplicate with conflict
 
 func New(opts *HelixOpts) *Helix {
 	hx := NewWithoutExchange(opts)

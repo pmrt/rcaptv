@@ -29,6 +29,26 @@ func Find(s []string, key string) int {
 	return -1
 }
 
+// Coalesce returns the first non-nil object or a nil object otherwise
+func Coalesce[T any](s ...*T) *T {
+	for _, item := range s {
+		if item != nil {
+			return item
+		}
+	}
+	return nil
+}
+
+// CoalesceString returns the first non-empty string or an empty string otherwise
+func CoalesceString(s ...string) string {
+	for _, str := range s {
+		if str != "" {
+			return str
+		}
+	}
+	return ""
+}
+
 // remove takes an slice and a key and returns the same slice without the
 // key element. The original slice will be mutated, don't use it.
 func RemoveKey(s []string, key string) []string {
@@ -103,6 +123,13 @@ func Abs(x int) int {
 func Min(x, y int) int {
 	x, y = Abs(x), Abs(y)
 	if x < y {
+		return x
+	}
+	return y
+}
+
+func Max(x, y int) int {
+	if x > y {
 		return x
 	}
 	return y
