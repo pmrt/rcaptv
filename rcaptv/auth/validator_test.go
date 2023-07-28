@@ -16,6 +16,13 @@ import (
 	"pedro.to/rcaptv/scheduler"
 )
 
+// note: there's is something slightly inconsistent that it's very hard to
+// debug. It seems that when removing and stopping if freq is too slow, it may
+// get executed twice and as a result, AfterCycle will be called twice.
+//
+// This should not be a problem since freq is generally very high and it's more
+// that it's hard to test consistently. freq is set to 1s in this test instead
+// of ms to mitigate a little bit this.
 func TestTokenValidator(t *testing.T) {
 	defer cleanupUserAndTokens()
 	twitchCreatedAt, err := time.Parse(time.RFC3339, "2015-05-02T17:47:43Z")
@@ -75,7 +82,7 @@ func TestTokenValidator(t *testing.T) {
 	}))
 
 	cycleSize = 1
-	freq = time.Millisecond * 10
+	freq = time.Millisecond * 1000
 	tv := NewTokenValidator(db, helix.NewWithoutExchange(&helix.HelixOpts{
 		Creds: helix.ClientCreds{
 			ClientID:     "",
