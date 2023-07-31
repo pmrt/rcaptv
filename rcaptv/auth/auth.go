@@ -83,6 +83,7 @@ type CtxKeyAPI int
 const (
 	CtxKeyUserID CtxKeyAPI = iota
 	CtxKeyToken
+	CtxKeyLoggedIn
 )
 
 func UserID(c *fiber.Ctx) int64 {
@@ -90,6 +91,13 @@ func UserID(c *fiber.Ctx) int64 {
 		return v
 	}
 	return 0
+}
+
+func IsLoggedIn(c *fiber.Ctx) bool {
+	if v, ok := c.UserContext().Value(CtxKeyLoggedIn).(bool); ok {
+		return v
+	}
+	return false
 }
 
 // note: internal APIs that don't use twitch api will need a different
@@ -109,7 +117,9 @@ func (p *Passport) WithAuth(c *fiber.Ctx) error {
 			msg += ")"
 			l.Debug().Msg(msg)
 		}
-		return c.SendStatus(fiber.StatusUnauthorized)
+		ctx := context.WithValue(context.Background(), CtxKeyLoggedIn, false)
+		c.SetUserContext(ctx)
+		return c.Next()
 	}
 
 	if !cfg.IsProd {
@@ -143,6 +153,7 @@ func (p *Passport) WithAuth(c *fiber.Ctx) error {
 	// make user id and token pair available too in the request stack
 	ctx = context.WithValue(ctx, CtxKeyUserID, creds.GetInt64(cookie.UserId))
 	ctx = context.WithValue(ctx, CtxKeyToken, t)
+	ctx = context.WithValue(ctx, CtxKeyLoggedIn, true)
 	c.SetUserContext(ctx)
 	return c.Next()
 }

@@ -480,8 +480,6 @@ func Deduplicate[T any](s []T, keyFn func(i T) string, conflictFn ...func(a T, b
 	return r
 }
 
-// TODO: test new deduplicate with conflict
-
 func New(opts *HelixOpts) *Helix {
 	hx := NewWithoutExchange(opts)
 	hx.Exchange()

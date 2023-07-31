@@ -25,6 +25,7 @@ import (
 	"pedro.to/rcaptv/utils"
 )
 
+// TODO: split vods and clips into their files
 type APIOpts struct {
 	Storage database.Storage
 
@@ -46,9 +47,18 @@ type API struct {
 	auth *auth.Passport
 }
 
+type ResultsMode string
+
+const (
+	ModeLocal  ResultsMode = "local"
+	ModeHybrid ResultsMode = "hybrid"
+	ModeRemote ResultsMode = "remote"
+)
+
 type APIResponse[T any] struct {
-	Data   T        `json:"data"`
-	Errors []string `json:"errors"`
+	Data   T           `json:"data"`
+	Errors []string    `json:"errors"`
+	Mode   ResultsMode `json:"mode"`
 }
 
 func NewResponse[T any](data T) *APIResponse[T] {
@@ -66,6 +76,7 @@ func (a *API) Vods(c *fiber.Ctx) error {
 	resp := NewResponse(&VodsResponse{
 		Vods: make([]*helix.VOD, 0, 5),
 	})
+	resp.Mode = ModeLocal
 
 	username := c.Query("username")
 	vid := c.Query("vid")
@@ -122,55 +133,49 @@ type ClipsResponse struct {
 // - `started_at` string Start range time of creation of the clip in RFC3339
 // - `ended_at` string End range time of creation of the clip in RFC3339
 //
-// Note: Twitch API does not provide a way to fetch clips by video_id.
-// Alternative is to ask for bid+start+end of the stream. This may leave out
+// If user is logged in it will presented with results from twitch api and
+// local tracked clips, deduplicated and merged. When merged we get the most
+// updated view_count value and vod_offset, video_id if available
+//
+// If user is not logged in only local tracked clips will be returned. View
+// count may be outdated. Local clips won't return dangling clips (with
+// vod_offset=null or empty video_id) by default.
+//
+// Note: Twitch API does not provide a way to fetch clips by video_id. An
+// alternative is to ask for bid+start+end of the stream. This may leave out
 // some interesting clips created after the stream and include clips from other
-// vods. One potential solution is to merge with tracker clips in server and
-// filter by vod id in the client
+// vods (unless filtered by video_id). To mitigate this we use an hybrid
+// solution when user is logged in we fetch clips from twitch api, we retrieve
+// clips from database, deduplicate and merge them. On the frontend, clips
+// should be filtered by vod_offset=null and the corresponding video_id.
 func (a *API) Clips(c *fiber.Ctx) error {
-	resp := NewResponse(&ClipsResponse{
-		Clips: make([]*helix.Clip, 0, 10),
-	})
+	if auth.IsLoggedIn(c) {
+		return a.hybridClips(c)
+	}
+	return a.localClips(c)
+}
 
-	bid := c.Query("bid")
-	if bid == "" {
-		resp.Errors = append(resp.Errors, "Missing bid")
-		return c.Status(http.StatusBadRequest).JSON(resp)
-	}
-	started_at := c.Query("started_at")
-	if started_at == "" {
-		resp.Errors = append(resp.Errors, "Missing started_at")
-		return c.Status(http.StatusBadRequest).JSON(resp)
-	}
-	ended_at := c.Query("ended_at")
-	if ended_at == "" {
-		resp.Errors = append(resp.Errors, "Missing ended_at")
+func (a *API) hybridClips(c *fiber.Ctx) error {
+	resp := NewResponse(new(ClipsResponse))
+	resp.Data.Clips = make([]*helix.Clip, 0, 1)
+	resp.Mode = ModeHybrid
+
+	params, errs := a.getClipParams(c)
+	if len(errs) > 0 {
+		resp.Errors = errs
 		return c.Status(http.StatusBadRequest).JSON(resp)
 	}
 
-	started, err := time.Parse(time.RFC3339, started_at)
-	if err != nil {
-		resp.Errors = append(resp.Errors, "Invalid 'started_at'")
-		return c.Status(http.StatusBadRequest).JSON(resp)
-	}
-	ended, err := time.Parse(time.RFC3339, ended_at)
-	if err != nil {
-		resp.Errors = append(resp.Errors, "Invalid 'ended_at'")
-		return c.Status(http.StatusBadRequest).JSON(resp)
-	}
-
-	if ended.Sub(started) > time.Duration(a.clipsMaxPeriodDiffHours)*time.Hour {
-		resp.Errors = append(resp.Errors, "period between 'started_at' and 'ended_at' is too large")
-		return c.Status(http.StatusBadRequest).JSON(resp)
-	}
+	// TODO: make twitch api and db requests concurrently
 
 	clips, err := a.hx.DeepClips(&helix.DeepClipsParams{
 		ClipsParams: &helix.ClipsParams{
-			BroadcasterID:            bid,
-			StartedAt:                started,
-			EndedAt:                  ended,
+			BroadcasterID:            params.bid,
+			StartedAt:                params.started,
+			EndedAt:                  params.ended,
 			StopViewsThreshold:       cfg.ClipViewThreshold,
 			ViewsThresholdWindowSize: cfg.ClipViewWindowSize,
+			SkipDeduplication:        true,
 			Context:                  c.UserContext(),
 		},
 		MaxDeepLvl: cfg.ClipTrackingMaxDeepLevel,
@@ -178,13 +183,65 @@ func (a *API) Clips(c *fiber.Ctx) error {
 	c, err = a.checkErr(c, err)
 	if err != nil {
 		if errors.Is(err, helix.ErrItemsEmpty) {
-			resp.Errors = append(resp.Errors, fmt.Sprintf("No clips found for the provided streamer (bid:'%s'). Are clips enabled for this streamer?", bid))
+			resp.Errors = append(resp.Errors,
+				fmt.Sprintf("No clips found for the provided streamer (bid:'%s'). Are clips enabled for this streamer?",
+					params.bid),
+			)
 			return c.JSON(resp)
 		}
 		resp.Errors = append(resp.Errors, "Unexpected error")
 		return c.JSON(resp)
 	}
-	resp.Data.Clips = append(resp.Data.Clips, clips...)
+	// clips from db, previously tracked
+	localClips, err := repo.Clips(a.db, &repo.ClipsParams{
+		BroadcasterID:   params.bid,
+		StartedAt:       params.started,
+		EndedAt:         params.ended,
+		ExcludeDangling: true,
+	})
+	if err != nil {
+		resp.Errors = append(resp.Errors, "Unexpected error while retrieving local clips")
+		return c.JSON(resp)
+	}
+	all := make([]*helix.Clip, 0, len(clips)+len(localClips))
+	all = append(append(all, localClips...), clips...)
+	// deduplicate and merge getting the most interesting values of both
+	resp.Data.Clips = helix.Deduplicate(all, func(c *helix.Clip) string {
+		return c.ClipID
+	}, func(a *helix.Clip, b *helix.Clip) *helix.Clip {
+		// preserve videoID if present in a or b
+		a.VideoID = utils.CoalesceString(a.VideoID, b.VideoID)
+		// preserve vodOffset if present in a or b
+		a.VODOffsetSeconds = utils.Coalesce(a.VODOffsetSeconds, b.VODOffsetSeconds)
+		// get most updated value of viewCount
+		a.ViewCount = utils.Max(a.ViewCount, b.ViewCount)
+		return a
+	})
+	return c.Status(http.StatusOK).JSON(resp)
+}
+
+func (a *API) localClips(c *fiber.Ctx) error {
+	resp := NewResponse(new(ClipsResponse))
+	resp.Data.Clips = make([]*helix.Clip, 0, 1)
+	resp.Mode = ModeLocal
+
+	params, errors := a.getClipParams(c)
+	if len(errors) > 0 {
+		resp.Errors = errors
+		return c.Status(http.StatusBadRequest).JSON(resp)
+	}
+
+	localClips, err := repo.Clips(a.db, &repo.ClipsParams{
+		BroadcasterID:   params.bid,
+		StartedAt:       params.started,
+		EndedAt:         params.ended,
+		ExcludeDangling: true,
+	})
+	if err != nil {
+		resp.Errors = append(resp.Errors, "Unexpected error while retrieving local clips")
+		return c.JSON(resp)
+	}
+	resp.Data.Clips = localClips
 	return c.Status(http.StatusOK).JSON(resp)
 }
 
@@ -203,6 +260,44 @@ func (a *API) checkErr(c *fiber.Ctx, err error) (*fiber.Ctx, error) {
 	}
 
 	return c.Status(http.StatusInternalServerError), fmt.Errorf("unexpected error: %w", err)
+}
+
+type clipParams struct {
+	bid     string
+	started time.Time
+	ended   time.Time
+}
+
+func (a *API) getClipParams(c *fiber.Ctx) (clipParams, []string) {
+	errors := make([]string, 0, 4)
+	bid := c.Query("bid")
+	if bid == "" {
+		errors = append(errors, "Missing bid")
+	}
+	startedAt := c.Query("started_at")
+	if startedAt == "" {
+		errors = append(errors, "Missing started_at")
+	}
+	endedAt := c.Query("ended_at")
+	if endedAt == "" {
+		errors = append(errors, "Missing ended_at")
+	}
+	started, err := time.Parse(time.RFC3339, startedAt)
+	if err != nil {
+		errors = append(errors, "Invalid 'started_at'")
+	}
+	ended, err := time.Parse(time.RFC3339, endedAt)
+	if err != nil {
+		errors = append(errors, "Invalid 'ended_at'")
+	}
+	if ended.Sub(started) > time.Duration(a.clipsMaxPeriodDiffHours)*time.Hour {
+		errors = append(errors, "period between 'started_at' and 'ended_at' is too large")
+	}
+	return clipParams{
+		bid:     bid,
+		started: started,
+		ended:   ended,
+	}, errors
 }
 
 func (a *API) StartAndListen(port string) error {
