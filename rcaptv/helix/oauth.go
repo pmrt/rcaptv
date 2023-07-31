@@ -34,14 +34,18 @@ func (s *notifyReuseTokenSource) Token() (*oauth2.Token, error) {
 type NotifyReuseTokenSourceOpts struct {
 	OAuthConfig *oauth2.Config
 	Notify      NotifyHandler
+	Context     context.Context
 }
 
 func NotifyReuseTokenSource(t *oauth2.Token, opts NotifyReuseTokenSourceOpts) oauth2.TokenSource {
 	if opts.Notify == nil {
 		opts.Notify = func(*oauth2.Token) error { return nil }
 	}
+	if opts.Context == nil {
+		opts.Context = context.Background()
+	}
 	return &notifyReuseTokenSource{
-		new: opts.OAuthConfig.TokenSource(context.Background(), t),
+		new: opts.OAuthConfig.TokenSource(opts.Context, t),
 		t:   t,
 		f:   opts.Notify,
 	}

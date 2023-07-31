@@ -103,6 +103,7 @@ func (a *API) Vods(c *fiber.Ctx) error {
 		BcUsername: username,
 		Extend:     utils.Min(ext, 5),
 		After:      after,
+		Context:    c.Context(),
 	})
 	if err != nil {
 		resp.Errors = append(resp.Errors, "Unexpected error")
@@ -236,6 +237,7 @@ func (a *API) localClips(c *fiber.Ctx) error {
 		StartedAt:       params.started,
 		EndedAt:         params.ended,
 		ExcludeDangling: true,
+		Context:         c.Context(),
 	})
 	if err != nil {
 		resp.Errors = append(resp.Errors, "Unexpected error while retrieving local clips")

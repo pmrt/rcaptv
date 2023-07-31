@@ -37,13 +37,20 @@ type CustomQueryOpts struct {
 	UseClientID bool
 }
 
-func ContextWithTokenSource(tk *oauth2.Token, opts NotifyReuseTokenSourceOpts) context.Context {
+func ContextWithTokenSource(ctx context.Context, tk *oauth2.Token, opts NotifyReuseTokenSourceOpts) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	opts.Context = ctx
 	src := NotifyReuseTokenSource(tk, opts)
-	return context.WithValue(context.Background(), CtxHelixTokenSource, src)
+	return context.WithValue(ctx, CtxHelixTokenSource, src)
 }
 
-func ContextWithCustomQueryOpts(opts *CustomQueryOpts) context.Context {
-	return context.WithValue(context.Background(), CtxHelixCustomQuery, opts)
+func ContextWithCustomQueryOpts(ctx context.Context, opts *CustomQueryOpts) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, CtxHelixCustomQuery, opts)
 }
 
 const EstimatedSubscriptionJSONSize = 350
@@ -304,7 +311,8 @@ func (hx *Helix) doAtMost(req *http.Request, attemptsLeft int) (*HttpResponse, e
 			l.Err(ErrInvalidContext).Msg("invalid context")
 			return nil, ErrInvalidContext
 		}
-		c = oauth2.NewClient(context.Background(), ts)
+		// we only will use this client within the current request
+		c = oauth2.NewClient(req.Context(), ts)
 	}
 	resp, err := c.Do(req)
 	if err != nil {

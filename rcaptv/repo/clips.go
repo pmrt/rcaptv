@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"time"
@@ -19,13 +20,22 @@ type ClipsParams struct {
 	// ExcludeDangling excludes clips that have no connection with vods
 	// (determined by vod_offset)
 	ExcludeDangling bool
+
+	Context context.Context
 }
 
 func Clips(db *sql.DB, p *ClipsParams) (r []*helix.Clip, err error) {
 	stmt := SELECT(
 		tbl.Clips.AllColumns,
 	).FROM(tbl.Clips)
+
+	var ctx context.Context
 	if p != nil {
+		if p.Context != nil {
+			ctx = p.Context
+		} else {
+			ctx = context.Background()
+		}
 		if p.BroadcasterID == "" {
 			return nil, errors.New("empty broadcaster id")
 		}
@@ -40,9 +50,11 @@ func Clips(db *sql.DB, p *ClipsParams) (r []*helix.Clip, err error) {
 			where = where.AND(tbl.Clips.VodOffset.IS_NOT_NULL())
 		}
 		stmt = stmt.WHERE(where)
+	} else {
+		ctx = context.Background()
 	}
 
-	if err = stmt.Query(db, &r); err != nil {
+	if err = stmt.QueryContext(ctx, db, &r); err != nil {
 		return nil, err
 	}
 	return r, nil

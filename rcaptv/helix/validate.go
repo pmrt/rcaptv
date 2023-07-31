@@ -1,6 +1,7 @@
 package helix
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 )
@@ -15,18 +16,26 @@ type ValidateTokenResponse struct {
 	ExpiresIn    int      `json:"expires_in"`
 }
 
+type ValidTokenParams struct {
+	AccessToken string
+	Context     context.Context
+}
+
 // ValidToken checks whether the provided access token is valid with the
 // Twitch API
-func (hx *Helix) ValidToken(at string) bool {
+func (hx *Helix) ValidToken(p ValidTokenParams) bool {
+	if p.Context == nil {
+		p.Context = context.Background()
+	}
 	req, err := http.NewRequest("GET", hx.ValidateEndpoint(), nil)
 	if err != nil {
 		return false
 	}
-	ctx := ContextWithCustomQueryOpts(&CustomQueryOpts{
+	ctx := ContextWithCustomQueryOpts(p.Context, &CustomQueryOpts{
 		UseClientID: false,
 	})
 	req = req.WithContext(ctx)
-	req.Header.Set("Authorization", fmt.Sprintf("OAuth %s", at))
+	req.Header.Set("Authorization", fmt.Sprintf("OAuth %s", p.AccessToken))
 
 	resp, err := hx.Do(req)
 	if err != nil {

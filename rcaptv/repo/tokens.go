@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"time"
@@ -18,6 +19,8 @@ type TokenPairParams struct {
 
 	// whether to include invalid tokens (default:false)
 	Invalid bool
+
+	Context context.Context
 }
 
 // TokenPair returns the corresponding oauth2.Token objects in the database for
@@ -28,6 +31,9 @@ type TokenPairParams struct {
 // By default TokenPair filters out non-expired tokens. If Invalid is true, it
 // also will include expired tokens.
 func TokenPair(db *sql.DB, p TokenPairParams) ([]*oauth2.Token, error) {
+	if p.Context == nil {
+		p.Context = context.Background()
+	}
 	if p.UserID == 0 {
 		return []*oauth2.Token{}, errors.New("repo.TokenPair: missing user id")
 	}
@@ -46,7 +52,7 @@ func TokenPair(db *sql.DB, p TokenPairParams) ([]*oauth2.Token, error) {
 	stmt = stmt.WHERE(where)
 
 	var res []*model.TokenPairs
-	err := stmt.Query(db, &res)
+	err := stmt.QueryContext(p.Context, db, &res)
 	if err != nil {
 		return []*oauth2.Token{}, err
 	}
@@ -64,10 +70,11 @@ func TokenPair(db *sql.DB, p TokenPairParams) ([]*oauth2.Token, error) {
 
 // ValidTokens returns whether the given access token for the provided userId
 // is found on the database and it is not expired
-func ValidToken(db *sql.DB, userID int64, accessToken string) bool {
+func ValidToken(db *sql.DB, ctx context.Context, userID int64, accessToken string) bool {
 	tks, err := TokenPair(db, TokenPairParams{
 		UserID:      userID,
 		AccessToken: accessToken,
+		Context:     ctx,
 	})
 	if err != nil {
 		return false
@@ -114,6 +121,8 @@ type DeleteTokenParams struct {
 
 	// If DeleteUnexpired is true. Valid tokens will be deleted too (default:false)
 	DeleteUnexpired bool
+
+	Context context.Context
 }
 
 // DeleteToken deletes expired tokens matching the provided parameters. If a
@@ -125,7 +134,14 @@ func DeleteToken(db *sql.DB, p *DeleteTokenParams) (int64, error) {
 	nowPlus10s := time.Now().Add(10 * time.Second)
 	stmt := tbl.TokenPairs.DELETE()
 	where := tbl.TokenPairs.ExpiresAt.LT(TimestampT(nowPlus10s))
+
+	var ctx context.Context
 	if p != nil {
+		if p.Context != nil {
+			ctx = p.Context
+		} else {
+			ctx = context.Background()
+		}
 		if p.DeleteUnexpired {
 			where = Bool(true)
 		}
@@ -138,9 +154,11 @@ func DeleteToken(db *sql.DB, p *DeleteTokenParams) (int64, error) {
 		if p.RefreshToken != "" {
 			where = where.AND(tbl.TokenPairs.RefreshToken.EQ(String(p.RefreshToken)))
 		}
+	} else {
+		ctx = context.Background()
 	}
 	stmt = stmt.WHERE(where)
-	res, err := stmt.Exec(db)
+	res, err := stmt.ExecContext(ctx, db)
 	if err != nil {
 		return 0, err
 	}

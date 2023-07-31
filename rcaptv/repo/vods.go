@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"context"
 	"database/sql"
 	"strings"
 
@@ -22,14 +23,19 @@ type VodsParams struct {
 	First  int
 	// After returns the First rows after `after` videoID
 	After string
+
+	Context context.Context
 }
 
 func Vods(db *sql.DB, p *VodsParams) ([]*helix.VOD, error) {
 	if p.First == 0 {
 		p.First = 1
 	}
+	if p.Context == nil {
+		p.Context = context.Background()
+	}
 	if p.BcUsername != "" {
-		return vodsByStreamer(db, p)
+		return vodsByStreamer(db, p.Context, p)
 	}
 	stmt := SELECT(
 		tbl.Vods.AllColumns,
@@ -55,17 +61,17 @@ func Vods(db *sql.DB, p *VodsParams) ([]*helix.VOD, error) {
 		LIMIT(int64(p.First))
 
 	var r []*helix.VOD
-	if err := stmt.Query(db, &r); err != nil {
+	if err := stmt.QueryContext(p.Context, db, &r); err != nil {
 		return nil, err
 	}
 
 	if len(r) > 0 {
 		lastVod := r[len(r)-1]
 		if p.After != "" {
-			return vodsAfter(db, lastVod, p.First)
+			return vodsAfter(db, p.Context, lastVod, p.First)
 		}
 		if p.Extend > 0 {
-			vods, err := vodsAfter(db, lastVod, p.Extend)
+			vods, err := vodsAfter(db, p.Context, lastVod, p.Extend)
 			if err != nil {
 				return nil, err
 			}
@@ -75,7 +81,7 @@ func Vods(db *sql.DB, p *VodsParams) ([]*helix.VOD, error) {
 	return r, nil
 }
 
-func vodsAfter(db *sql.DB, lastVod *helix.VOD, limit int) (r []*helix.VOD, err error) {
+func vodsAfter(db *sql.DB, ctx context.Context, lastVod *helix.VOD, limit int) (r []*helix.VOD, err error) {
 	stmt := SELECT(
 		tbl.Vods.AllColumns,
 	).FROM(tbl.Vods).
@@ -84,13 +90,13 @@ func vodsAfter(db *sql.DB, lastVod *helix.VOD, limit int) (r []*helix.VOD, err e
 				AND(
 					tbl.Vods.BcID.EQ(String(lastVod.BroadcasterID)),
 				)).ORDER_BY(tbl.Vods.CreatedAt.DESC()).LIMIT(int64(limit))
-	if err := stmt.Query(db, &r); err != nil {
+	if err := stmt.QueryContext(ctx, db, &r); err != nil {
 		return nil, err
 	}
 	return r, nil
 }
 
-func vodsByStreamer(db *sql.DB, p *VodsParams) (r []*helix.VOD, err error) {
+func vodsByStreamer(db *sql.DB, ctx context.Context, p *VodsParams) (r []*helix.VOD, err error) {
 	username := strings.ToLower(p.BcUsername)
 	stmt := SELECT(
 		tbl.Vods.AllColumns,
@@ -103,7 +109,7 @@ func vodsByStreamer(db *sql.DB, p *VodsParams) (r []*helix.VOD, err error) {
 		tbl.TrackedChannels.BcUsername.EQ(String(username)),
 	).ORDER_BY(tbl.Vods.CreatedAt.DESC()).LIMIT(int64(p.First))
 
-	if err = stmt.Query(db, &r); err != nil {
+	if err = stmt.QueryContext(ctx, db, &r); err != nil {
 		return nil, err
 	}
 	return r, nil

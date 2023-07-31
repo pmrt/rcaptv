@@ -67,7 +67,8 @@ func (v *TokenValidator) Run() error {
 				}
 
 				tks, err := repo.TokenPair(v.db, repo.TokenPairParams{
-					UserID: usrid,
+					UserID:  usrid,
+					Context: v.ctx,
 				})
 				if err != nil {
 					l.Err(err).Msgf("validator: error while fetching token pair for usrid:%d (%s)", usrid, err.Error())
@@ -75,7 +76,10 @@ func (v *TokenValidator) Run() error {
 
 				allInvalid := true
 				for _, tk := range tks {
-					if v.hx.ValidToken(tk.AccessToken) {
+					if v.hx.ValidToken(helix.ValidTokenParams{
+						AccessToken: tk.AccessToken,
+						Context:     v.ctx,
+					}) {
 						allInvalid = false
 						continue
 					}
@@ -85,6 +89,7 @@ func (v *TokenValidator) Run() error {
 						UserID:          usrid,
 						AccessToken:     tk.AccessToken,
 						DeleteUnexpired: true,
+						Context:         v.ctx,
 					}); err != nil {
 						if err == repo.ErrNoRowsAffected {
 							l.Err(err).Msgf("validator: no rows affected but wanted to delete token for usrid:%d", usrid)

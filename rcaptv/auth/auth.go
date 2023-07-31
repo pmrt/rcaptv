@@ -117,7 +117,7 @@ func (p *Passport) WithAuth(c *fiber.Ctx) error {
 			msg += ")"
 			l.Debug().Msg(msg)
 		}
-		ctx := context.WithValue(context.Background(), CtxKeyLoggedIn, false)
+		ctx := context.WithValue(c.Context(), CtxKeyLoggedIn, false)
 		c.SetUserContext(ctx)
 		return c.Next()
 	}
@@ -136,7 +136,7 @@ func (p *Passport) WithAuth(c *fiber.Ctx) error {
 		TokenType:    "Bearer",
 	}
 	// add tokenSource to Ctx to use and refresh tokens in the request stack
-	ctx := helix.ContextWithTokenSource(t, helix.NotifyReuseTokenSourceOpts{
+	ctx := helix.ContextWithTokenSource(c.Context(), t, helix.NotifyReuseTokenSourceOpts{
 		OAuthConfig: p.oAuthConfig,
 		// this functions holds the reference to Fiber.Ctx. The tokensource
 		// lifespan is meant to last at least the same as the request lifespan,
@@ -308,7 +308,7 @@ func (p *Passport) ValidateSession(c *fiber.Ctx) error {
 	}
 	id := creds.GetInt64(cookie.UserId)
 	at := creds.Get(cookie.AccessToken)
-	if !creds.Expired() && repo.ValidToken(p.db, id, at) {
+	if !creds.Expired() && repo.ValidToken(p.db, c.Context(), id, at) {
 		// skip further validation if the token is still in the db
 		return c.SendStatus(fiber.StatusOK)
 	}
@@ -444,7 +444,7 @@ func (p *Passport) Callback(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 
-	ctx := helix.ContextWithTokenSource(tk, helix.NotifyReuseTokenSourceOpts{
+	ctx := helix.ContextWithTokenSource(c.Context(), tk, helix.NotifyReuseTokenSourceOpts{
 		OAuthConfig: p.oAuthConfig,
 		// omit notify since we just got a new token pair and we don't expect it to
 		// be refreshed during this request.
@@ -477,6 +477,7 @@ func (p *Passport) Logout(c *fiber.Ctx) error {
 		UserID:          id,
 		DeleteUnexpired: true,
 		RefreshToken:    t.RefreshToken,
+		Context:         c.Context(),
 	}
 	// ?all=1 -> Remove all tokens for the user
 	if c.Query("all") == "1" {
