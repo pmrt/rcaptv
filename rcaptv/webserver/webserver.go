@@ -95,8 +95,8 @@ func (sv *WebServer) newServer() *fiber.App {
 	app.Get(cfg.HealthEndpoint, func(c *fiber.Ctx) error {
 		return c.Status(http.StatusOK).Send([]byte("ok"))
 	})
-	app.Get(cfg.LoginEndpoint, sv.auth.Login)
-	app.Get(cfg.LogoutEndpoint, sv.auth.Logout)
+	app.Get(cfg.LoginEndpoint, sv.auth.WithAuth, sv.auth.Login)
+	app.Get(cfg.LogoutEndpoint, sv.auth.WithAuth, sv.auth.Logout)
 	auth := app.Group(cfg.AuthEndpoint)
 	auth.Get(cfg.AuthRedirectEndpoint, sv.auth.Callback)
 	l.Info().Msgf("websv health: %s", cfg.HealthEndpoint)
