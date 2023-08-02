@@ -33,7 +33,7 @@ type Services struct {
 }
 
 func (s *Services) Start() {
-	l := log.With().Str("ctx", "webserver").Logger()
+	l := log.With().Str("ctx", "auth").Logger()
 
 	s.wg.Add(2)
 	l.Info().Msg("starting TokenValidator")
@@ -49,7 +49,7 @@ func (s *Services) Start() {
 }
 
 func (s *Services) Stop() {
-	l := log.With().Str("ctx", "webserver").Logger()
+	l := log.With().Str("ctx", "auth").Logger()
 	defer s.wg.Wait()
 	l.Info().Msg("stopping TokenValidator")
 	s.tv.Stop()
