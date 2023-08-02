@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"math"
 	"strconv"
 	"sync"
 	"time"
@@ -126,6 +127,10 @@ type (
 	KeyToMinuteMap map[string]Minute
 )
 
+// TODO: remove Schedule mutex. We can sync access with channels (buffered op
+// channel for add/remove) and allow only the scheduler goroutine to access the
+// map
+//
 // Schedule is a guarded schedule map, safe for concurrent access
 type Schedule struct {
 	mu       sync.Mutex
@@ -155,7 +160,10 @@ func (s *Schedule) Remove(min Minute, key string) {
 func (s *Schedule) Pick(min Minute) []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.schedule[min]
+	orig := s.schedule[min]
+	clone := make([]string, len(orig))
+	copy(clone, orig)
+	return clone
 }
 
 // return a clone of current contents of schedule. Useful for testing
@@ -188,7 +196,7 @@ func (s *Schedule) TestKeyToMinute() KeyToMinuteMap {
 // Balance is determined by opts.BalanceStrategy balancer. The default balancer
 // is a deterministic count balancer.
 type BalancedSchedule struct {
-	internal       Schedule
+	internal       *Schedule
 	realTime       chan RealTimeMinute
 	cancelRealTime chan struct{}
 	ctx            context.Context
@@ -304,12 +312,14 @@ func New(opts BalancedScheduleOpts) *BalancedSchedule {
 
 	pre := make(ScheduleMap, opts.CycleSize)
 	// preallocate strings slices
+	estSize, cycleSize := float64(opts.EstimatedObjects), float64(opts.CycleSize)
+	minSize := int64(math.Round(estSize / cycleSize))
 	for min := range pre {
-		pre[min] = make([]string, 0, opts.EstimatedObjects/opts.CycleSize)
+		pre[min] = make([]string, 0, minSize)
 	}
 	bs := &BalancedSchedule{
 		opts: opts,
-		internal: Schedule{
+		internal: &Schedule{
 			schedule: pre,
 			keyToMin: make(KeyToMinuteMap),
 		},

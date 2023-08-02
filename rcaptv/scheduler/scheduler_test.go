@@ -196,3 +196,51 @@ Cycle:
 		t.Fatalf("expected minute 0 to have 25 streamers, got %d", got)
 	}
 }
+
+func TestBalancedScheduleRealTimeAfterStart(t *testing.T) {
+	t.Parallel()
+	spew.Config = spew.ConfigState{
+		SortKeys: true,
+		SpewKeys: true,
+	}
+	pickInterval := time.Millisecond * 25
+
+	bs := New(BalancedScheduleOpts{
+		CycleSize:        10,
+		EstimatedObjects: 20,
+		Freq:             pickInterval,
+	})
+	bs.Start()
+	time.Sleep(time.Second)
+
+	key := "1"
+	timeout := time.After(time.Second)
+	addTimeout := time.After(100 * time.Millisecond)
+	objsPerMin := make([][]string, 0, 20)
+Cycle:
+	for {
+		select {
+		case <-timeout:
+			bs.Stop()
+			break Cycle
+		case <-addTimeout:
+			bs.Add(key)
+		case m := <-bs.RealTime():
+			objsPerMin = append(objsPerMin, m.Objects)
+		}
+	}
+	want := key
+	notFound := true
+	for _, objs := range objsPerMin {
+		if len(objs) == 0 {
+			continue
+		}
+		if objs[0] == want {
+			notFound = false
+		}
+	}
+	if notFound {
+		spew.Dump(objsPerMin)
+		t.Fatalf("expected '%s' to be Picked() by scheduler at least once", want)
+	}
+}
