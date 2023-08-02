@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/encryptcookie"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/sync/errgroup"
 
 	"pedro.to/rcaptv/auth"
 	cfg "pedro.to/rcaptv/config"
@@ -26,6 +28,10 @@ import (
 )
 
 // TODO: split vods and clips into their files
+//
+
+var ErrDbLocalClips = errors.New("Unexpected error while retrieving local clips")
+
 type APIOpts struct {
 	Storage database.Storage
 
@@ -158,7 +164,7 @@ func (a *API) Clips(c *fiber.Ctx) error {
 
 func (a *API) hybridClips(c *fiber.Ctx) error {
 	resp := NewResponse(new(ClipsResponse))
-	resp.Data.Clips = make([]*helix.Clip, 0, 1)
+	resp.Data.Clips = make([]*helix.Clip, 0, 200)
 	resp.Mode = ModeHybrid
 
 	params, errs := a.getClipParams(c)
@@ -167,22 +173,46 @@ func (a *API) hybridClips(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(resp)
 	}
 
-	// TODO: make twitch api and db requests concurrently
-
-	clips, err := a.hx.DeepClips(&helix.DeepClipsParams{
-		ClipsParams: &helix.ClipsParams{
-			BroadcasterID:            params.bid,
-			StartedAt:                params.started,
-			EndedAt:                  params.ended,
-			StopViewsThreshold:       cfg.ClipViewThreshold,
-			ViewsThresholdWindowSize: cfg.ClipViewWindowSize,
-			SkipDeduplication:        true,
-			Context:                  c.UserContext(),
-		},
-		MaxDeepLvl: cfg.ClipTrackingMaxDeepLevel,
+	res := make(chan []*helix.Clip, 2)
+	ctx, cancel := context.WithTimeout(c.UserContext(), 15*time.Second)
+	defer cancel()
+	g, ctx := errgroup.WithContext(ctx)
+	// clips from twitch api
+	g.Go(func() error {
+		clips, err := a.hx.DeepClips(&helix.DeepClipsParams{
+			ClipsParams: &helix.ClipsParams{
+				BroadcasterID:            params.bid,
+				StartedAt:                params.started,
+				EndedAt:                  params.ended,
+				StopViewsThreshold:       cfg.ClipViewThreshold,
+				ViewsThresholdWindowSize: cfg.ClipViewWindowSize,
+				SkipDeduplication:        true,
+				Context:                  ctx,
+			},
+			MaxDeepLvl: cfg.ClipTrackingMaxDeepLevel,
+		})
+		if err != nil {
+			return err
+		}
+		res <- clips
+		return nil
 	})
-	c, err = a.checkErr(c, err)
-	if err != nil {
+	// clips from db, previously tracked with our tracker
+	g.Go(func() error {
+		localClips, err := repo.Clips(a.db, &repo.ClipsParams{
+			BroadcasterID:   params.bid,
+			StartedAt:       params.started,
+			EndedAt:         params.ended,
+			ExcludeDangling: true,
+			Context:         ctx,
+		})
+		if err != nil {
+			return ErrDbLocalClips
+		}
+		res <- localClips
+		return nil
+	})
+	if err := a.checkErr(c, g.Wait()); err != nil {
 		if errors.Is(err, helix.ErrItemsEmpty) {
 			resp.Errors = append(resp.Errors,
 				fmt.Sprintf("No clips found for the provided streamer (bid:'%s'). Are clips enabled for this streamer?",
@@ -190,24 +220,23 @@ func (a *API) hybridClips(c *fiber.Ctx) error {
 			)
 			return c.JSON(resp)
 		}
+		if errors.Is(err, ErrDbLocalClips) {
+			resp.Errors = append(resp.Errors, err.Error())
+			return c.JSON(resp)
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			resp.Errors = append(resp.Errors, "Timeout when fetching clips in hybrid mode. Try again.")
+			c.Status(http.StatusGatewayTimeout)
+			return c.JSON(resp)
+		}
 		resp.Errors = append(resp.Errors, "Unexpected error")
 		return c.JSON(resp)
 	}
-	// clips from db, previously tracked
-	localClips, err := repo.Clips(a.db, &repo.ClipsParams{
-		BroadcasterID:   params.bid,
-		StartedAt:       params.started,
-		EndedAt:         params.ended,
-		ExcludeDangling: true,
-	})
-	if err != nil {
-		resp.Errors = append(resp.Errors, "Unexpected error while retrieving local clips")
-		return c.JSON(resp)
+	for i := 0; i < 2; i++ {
+		clips := <-res
+		resp.Data.Clips = append(resp.Data.Clips, clips...)
 	}
-	all := make([]*helix.Clip, 0, len(clips)+len(localClips))
-	all = append(append(all, localClips...), clips...)
-	// deduplicate and merge getting the most interesting values of both
-	resp.Data.Clips = helix.Deduplicate(all, func(c *helix.Clip) string {
+	resp.Data.Clips = helix.Deduplicate(resp.Data.Clips, func(c *helix.Clip) string {
 		return c.ClipID
 	}, func(a *helix.Clip, b *helix.Clip) *helix.Clip {
 		// preserve videoID if present in a or b
@@ -247,21 +276,24 @@ func (a *API) localClips(c *fiber.Ctx) error {
 	return c.Status(http.StatusOK).JSON(resp)
 }
 
-func (a *API) checkErr(c *fiber.Ctx, err error) (*fiber.Ctx, error) {
+func (a *API) checkErr(c *fiber.Ctx, err error) error {
 	if err == nil {
-		return c, nil
+		return nil
 	}
 
 	if errors.Is(err, helix.ErrUnauthorized) {
 		auth.ClearAuthCookies(c)
-		return c.Status(http.StatusUnauthorized), helix.ErrUnauthorized
+		c.Status(http.StatusUnauthorized)
+		return helix.ErrUnauthorized
 	}
 
 	if errors.Is(err, helix.ErrItemsEmpty) {
-		return c.Status(http.StatusNotFound), helix.ErrItemsEmpty
+		c.Status(http.StatusNotFound)
+		return helix.ErrItemsEmpty
 	}
 
-	return c.Status(http.StatusInternalServerError), fmt.Errorf("unexpected error: %w", err)
+	c.Status(http.StatusInternalServerError)
+	return fmt.Errorf("unexpected error: %w", err)
 }
 
 type clipParams struct {
