@@ -26,6 +26,8 @@ var ExpiredCookieExpiry = time.Date(2009, time.November, 10, 23, 0, 0, 0, time.U
 // Services handles related webserver services.
 //
 // IMPORTANT: Services must not be copied
+// TODO: split this into an executable. Passport has to send commands (AddUser)
+// to Validator via gRPC
 type Services struct {
 	wg sync.WaitGroup
 	tv *TokenValidator
@@ -368,6 +370,15 @@ func (p *Passport) upsertSession(c *fiber.Ctx, t *oauth2.Token, usrid int64, usr
 	}
 	// update token validator schedule. We consider an user active when the
 	// session is updated
+	//
+	// IMPORTANT: this will be executed in another goroutine to prevent requests
+	// from blocking, this means that we have to double check every argument
+	// passed to this method, as it may hold values for a lifespan longer than
+	// the request handler. In this case we are passing an int64 so it is safe
+	// because it is passed by value and thus copied, but if e.g.: we change this
+	// to a string in the future and the string comes from fiber.Ctx, the
+	// underlying value of the string may be recycled and re-used in other
+	// requests when this handler returns.
 	p.svc.tv.AddUser(usrid)
 	return nil
 }
