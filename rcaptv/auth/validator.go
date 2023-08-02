@@ -3,9 +3,11 @@ package auth
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strconv"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/rs/zerolog/log"
 
 	cfg "pedro.to/rcaptv/config"
@@ -26,10 +28,28 @@ type TokenValidator struct {
 
 func (v *TokenValidator) AddUser(id int64) {
 	v.balancer.Add(strconv.FormatInt(id, 10))
+	if !cfg.IsProd {
+		l := log.With().Str("ctx", "token_validator").Logger()
+		l.Debug().Msgf(
+			"validator: added usrid:%d@%smin",
+			id, v.balancer.BalancedMin(strconv.FormatInt(id, 10)))
+		fmt.Printf("\nAddUser\nschedule:\n%s\nkeyToMin:\n%s\n(balancer:%p)\n",
+			spew.Sdump(v.balancer.TestSchedule()), spew.Sdump(v.balancer.TestKeyToMinute()), v.balancer,
+		)
+	}
 }
 
 func (v *TokenValidator) RemoveUser(id int64) {
 	v.balancer.Remove(strconv.FormatInt(id, 10))
+	if !cfg.IsProd {
+		l := log.With().Str("ctx", "token_validator").Logger()
+		l.Debug().Msgf(
+			"validator: removed usrid:%d@%smin",
+			id, v.balancer.BalancedMin(strconv.FormatInt(id, 10)))
+		fmt.Printf("\nAddUser\nschedule:\n%s\nkeyToMin:\n%s\n(balancer:%p)\n",
+			spew.Sdump(v.balancer.TestSchedule()), spew.Sdump(v.balancer.TestKeyToMinute()), v.balancer,
+		)
+	}
 }
 
 func (v *TokenValidator) Reset() {
@@ -48,12 +68,18 @@ func (v *TokenValidator) Run() error {
 	for _, usr := range usrs {
 		v.AddUser(int64(usr.UserID))
 	}
-	l.Info().Msgf("validator: added:%d", len(usrs))
+	l.Info().Msgf("validator: added:%d (balancer:%p)", len(usrs), v.balancer)
 
 	v.balancer.Start()
 	for {
 		select {
 		case m := <-v.balancer.RealTime():
+			if !cfg.IsProd {
+				l.Debug().Msgf("validator: min:%s objs:%v", m.Min, m.Objects)
+				fmt.Printf("\nValidator (balancer:%p)\nschedule:\n%s\nkeyToMin:\n%s",
+					v.balancer, spew.Sdump(v.balancer.TestSchedule()), spew.Sdump(v.balancer.TestKeyToMinute()),
+				)
+			}
 			for _, usrid := range m.Objects {
 				idstr := usrid // keep ref to str for parsing errors
 				usrid, err := strconv.ParseInt(idstr, 10, 64)
@@ -103,9 +129,6 @@ func (v *TokenValidator) Run() error {
 				if allInvalid {
 					// we only are interested in keep validating active users
 					v.RemoveUser(usrid)
-					if !cfg.IsProd {
-						l.Debug().Msgf("validator: removed usrid:%s", idstr)
-					}
 				}
 			}
 			v.AfterCycle(m)
