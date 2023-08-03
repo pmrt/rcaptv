@@ -151,10 +151,6 @@ func TestBalancedLowEstimation(t *testing.T) {
 
 func TestBalancedScheduleRealTime1Pick(t *testing.T) {
 	t.Parallel()
-	spew.Config = spew.ConfigState{
-		SortKeys: true,
-		SpewKeys: true,
-	}
 	pickInterval := time.Millisecond * 10
 	after := time.Millisecond * 15
 	r := make([]RealTimeMinute, 0, 5)
@@ -199,10 +195,6 @@ Cycle:
 
 func TestBalancedScheduleRealTimeAfterStart(t *testing.T) {
 	t.Parallel()
-	spew.Config = spew.ConfigState{
-		SortKeys: true,
-		SpewKeys: true,
-	}
 	pickInterval := time.Millisecond * 25
 
 	bs := New(BalancedScheduleOpts{
@@ -242,5 +234,12 @@ Cycle:
 	if notFound {
 		spew.Dump(objsPerMin)
 		t.Fatalf("expected '%s' to be Picked() by scheduler at least once", want)
+	}
+}
+
+func init() {
+	spew.Config = spew.ConfigState{
+		SortKeys: true,
+		SpewKeys: true,
 	}
 }

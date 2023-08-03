@@ -188,6 +188,12 @@ func (s *Schedule) TestKeyToMinute() KeyToMinuteMap {
 	return clone
 }
 
+type SchedulerCtx struct {
+	mu     sync.Mutex
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
 // BalancedSchedule balances the objects in a given cycle size. Objects can
 // be hot-added while the scheduler is running.
 //
@@ -199,8 +205,7 @@ type BalancedSchedule struct {
 	internal       *Schedule
 	realTime       chan RealTimeMinute
 	cancelRealTime chan struct{}
-	ctx            context.Context
-	cancel         context.CancelFunc
+	ctx            *SchedulerCtx
 	salt           string
 
 	opts BalancedScheduleOpts
@@ -261,7 +266,7 @@ func (bs *BalancedSchedule) TestKeyToMinute() KeyToMinuteMap {
 //
 // The scheduler must be stopped with bs.Stop()
 func (bs *BalancedSchedule) Start() {
-	bs.ctx, bs.cancel = context.WithCancel(context.Background())
+	bs.resetContext(false)
 	ticker := time.NewTicker(bs.opts.Freq)
 	m := ResetMinute
 	max := Minute(bs.opts.CycleSize - 1)
@@ -269,9 +274,8 @@ func (bs *BalancedSchedule) Start() {
 		defer ticker.Stop()
 		for {
 			select {
-			case <-bs.ctx.Done():
-				bs.ctx = nil
-				bs.cancel = nil
+			case <-bs.context().Done():
+				bs.resetContext(true)
 				return
 			case <-ticker.C:
 				bs.realTime <- RealTimeMinute{Min: m, Objects: bs.Pick(m)}
@@ -285,10 +289,28 @@ func (bs *BalancedSchedule) Start() {
 	}()
 }
 
+func (bs *BalancedSchedule) context() context.Context {
+	bs.ctx.mu.Lock()
+	defer bs.ctx.mu.Unlock()
+	return bs.ctx.ctx
+}
+
+func (bs *BalancedSchedule) resetContext(empty bool) {
+	bs.ctx.mu.Lock()
+	defer bs.ctx.mu.Unlock()
+	if empty {
+		bs.ctx.ctx, bs.ctx.cancel = nil, nil
+	} else {
+		bs.ctx.ctx, bs.ctx.cancel = context.WithCancel(context.Background())
+	}
+}
+
 // Stop the scheduler. Stop is idempotent
 func (bs *BalancedSchedule) Stop() {
-	if bs.ctx != nil && bs.cancel != nil {
-		bs.cancel()
+	bs.ctx.mu.Lock()
+	defer bs.ctx.mu.Unlock()
+	if bs.ctx.ctx != nil && bs.ctx.cancel != nil {
+		bs.ctx.cancel()
 	}
 }
 
@@ -325,6 +347,7 @@ func New(opts BalancedScheduleOpts) *BalancedSchedule {
 		},
 		realTime: make(chan RealTimeMinute),
 		salt:     opts.Salt,
+		ctx:      new(SchedulerCtx),
 	}
 	return bs
 }

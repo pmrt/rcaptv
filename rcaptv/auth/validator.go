@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -17,12 +18,17 @@ import (
 
 type ReadyCh chan struct{}
 
+type ValidatorCtx struct {
+	mu     sync.Mutex
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
 type TokenValidator struct {
 	balancer *scheduler.BalancedSchedule
 	db       *sql.DB
 	hx       *helix.Helix
-	ctx      context.Context
-	cancel   context.CancelFunc
+	ctx      *ValidatorCtx
 
 	AfterCycle func(m scheduler.RealTimeMinute)
 	readyCh    ReadyCh
@@ -50,8 +56,20 @@ func (v *TokenValidator) RemoveUser(id int64) {
 	}
 }
 
-func (v *TokenValidator) Reset() {
-	v.ctx, v.cancel = context.WithCancel(context.Background())
+func (v *TokenValidator) resetContext(empty bool) {
+	v.ctx.mu.Lock()
+	defer v.ctx.mu.Unlock()
+	if empty {
+		v.ctx.ctx, v.ctx.cancel = nil, nil
+	} else {
+		v.ctx.ctx, v.ctx.cancel = context.WithCancel(context.Background())
+	}
+}
+
+func (v *TokenValidator) context() context.Context {
+	v.ctx.mu.Lock()
+	defer v.ctx.mu.Unlock()
+	return v.ctx.ctx
 }
 
 // Ready returns a channel that will be closed when ready. It can be used to
@@ -61,7 +79,7 @@ func (v *TokenValidator) Ready() <-chan struct{} {
 }
 
 func (v *TokenValidator) Run() error {
-	v.Reset()
+	v.resetContext(false)
 	v.l = log.With().Str("ctx", "token_validator").Logger()
 	v.l.Info().Msgf("initializing token validator (cycle:%dmin estimated_active_users:%d)", cycleSize, v.balancer.EstimatedObjects())
 	v.l.Info().Msg("validator: retrieving current active users")
@@ -93,9 +111,11 @@ func (v *TokenValidator) Run() error {
 				close(v.readyCh)
 			}
 
-		case <-v.ctx.Done():
+		case <-v.context().Done():
+			ctx := v.context()
+			v.resetContext(true)
 			v.l.Info().Msg("stopping validator")
-			return v.ctx.Err()
+			return ctx.Err()
 		}
 	}
 }
@@ -104,6 +124,7 @@ func (v *TokenValidator) cycle(m scheduler.RealTimeMinute) {
 	if !cfg.IsProd {
 		v.l.Debug().Msgf("validator: min:%s objs:%v", m.Min, m.Objects)
 	}
+	ctx := v.context()
 	for _, usrid := range m.Objects {
 		idstr := usrid // keep ref to str for parsing errors
 		usrid, err := strconv.ParseInt(idstr, 10, 64)
@@ -118,7 +139,7 @@ func (v *TokenValidator) cycle(m scheduler.RealTimeMinute) {
 
 		tks, err := repo.TokenPair(v.db, repo.TokenPairParams{
 			UserID:  usrid,
-			Context: v.ctx,
+			Context: ctx,
 		})
 		if err != nil {
 			v.l.Err(err).Msgf("validator: error while fetching token pair for usrid:%d (%s)", usrid, err.Error())
@@ -128,7 +149,7 @@ func (v *TokenValidator) cycle(m scheduler.RealTimeMinute) {
 		for _, tk := range tks {
 			if v.hx.ValidToken(helix.ValidTokenParams{
 				AccessToken: tk.AccessToken,
-				Context:     v.ctx,
+				Context:     ctx,
 			}) {
 				allInvalid = false
 				continue
@@ -139,7 +160,7 @@ func (v *TokenValidator) cycle(m scheduler.RealTimeMinute) {
 				UserID:          usrid,
 				AccessToken:     tk.AccessToken,
 				DeleteUnexpired: true,
-				Context:         v.ctx,
+				Context:         ctx,
 			}); err != nil {
 				if err == repo.ErrNoRowsAffected {
 					v.l.Err(err).Msgf("validator: no rows affected but wanted to delete token for usrid:%d", usrid)
@@ -160,7 +181,12 @@ func (v *TokenValidator) cycle(m scheduler.RealTimeMinute) {
 
 func (v *TokenValidator) Stop() {
 	v.balancer.Stop()
-	v.cancel()
+
+	v.ctx.mu.Lock()
+	defer v.ctx.mu.Unlock()
+	if v.ctx.ctx != nil && v.ctx.cancel != nil {
+		v.ctx.cancel()
+	}
 }
 
 var (
@@ -181,5 +207,6 @@ func NewTokenValidator(db *sql.DB, hx *helix.Helix) *TokenValidator {
 		hx:         hx,
 		AfterCycle: func(m scheduler.RealTimeMinute) {},
 		readyCh:    make(ReadyCh, 1),
+		ctx:        new(ValidatorCtx),
 	}
 }
