@@ -19,9 +19,10 @@ import (
 type ReadyCh chan struct{}
 
 type ValidatorCtx struct {
-	mu     sync.Mutex
-	ctx    context.Context
-	cancel context.CancelFunc
+	mu       sync.Mutex
+	ctx      context.Context
+	cancel   context.CancelFunc
+	stopping chan struct{}
 }
 
 type TokenValidator struct {
@@ -67,6 +68,7 @@ func (v *TokenValidator) resetContext(empty bool) {
 		v.ctx.ctx, v.ctx.cancel = nil, nil
 	} else {
 		v.ctx.ctx, v.ctx.cancel = context.WithCancel(context.Background())
+		v.ctx.stopping = make(chan struct{})
 	}
 }
 
@@ -99,14 +101,14 @@ func (v *TokenValidator) Run() error {
 		v.l.Info().Msgf("validator: added:%d (balancer:%p)", len(usrs), v.balancer)
 	}
 
-	ready := make(chan struct{}, 1)
+	once := make(chan struct{}, 1)
 
 	v.balancer.Start()
 	for {
 		select {
 		case m := <-v.balancer.RealTime():
 			v.cycle(m)
-		case ready <- struct{}{}:
+		case once <- struct{}{}:
 			// notify we're ready. readyCh is a channel that no goroutine will ever
 			// write, so it is safe to check if it is closed by trying to receive
 			// from it
@@ -119,10 +121,11 @@ func (v *TokenValidator) Run() error {
 			}
 
 		case <-v.context().Done():
-			ctx := v.context()
+			v.l.Info().Msg("stopped validator")
+			err := v.context().Err()
 			v.resetContext(true)
-			v.l.Info().Msg("stopping validator")
-			return ctx.Err()
+			close(v.ctx.stopping)
+			return err
 		}
 	}
 }
@@ -196,10 +199,12 @@ func (v *TokenValidator) Stop() {
 	v.balancer.Stop()
 
 	v.ctx.mu.Lock()
-	defer v.ctx.mu.Unlock()
 	if v.ctx.ctx != nil && v.ctx.cancel != nil {
 		v.ctx.cancel()
 	}
+	v.ctx.mu.Unlock()
+
+	<-v.ctx.stopping
 }
 
 var (
