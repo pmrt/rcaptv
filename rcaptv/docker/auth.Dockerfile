@@ -14,16 +14,16 @@ ENV GOOS=linux
 ENV GOARCH=amd64
 ARG IS_PROD
 RUN if [ "$IS_PROD" = "1" ]; \
-  then go build -tags RELEASE -o /build/api ./cmd/api; \
-  else go build -o /build/api ./cmd/api; \
+  then go build -tags RELEASE -o /build/auth ./cmd/auth; \
+  else go build -o /build/auth ./cmd/auth; \
   fi
 RUN mkdir -p /build/migrations/postgres /build/x509 &&\
   cp /src/database/postgres/migrations/* /build/migrations/postgres/ &&\
   cp /src/certs/x509/* /build/x509/ &&\
-  chmod +x /build/api
+  chmod +x /build/auth
 
 FROM gcr.io/distroless/static-debian11:latest-amd64 AS final
 WORKDIR /app
 COPY --from=build /build .
-EXPOSE 3021
-ENTRYPOINT ["/app/api"]
+EXPOSE 4001
+ENTRYPOINT ["/app/auth"]

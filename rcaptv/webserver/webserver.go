@@ -18,19 +18,18 @@ import (
 )
 
 type WebServer struct {
-	sv   *fiber.App
-	auth *auth.Passport
+	sv       *fiber.App
+	passport *auth.Passport
 }
 
 var scopes = []string{"user:read:email"}
 
-// Starts the server and required services for the WebServer. Make sure to call
-// Shutdown()
+// Starts the web server. Shutdown() must be handled.
 func (sv *WebServer) StartAndListen(port string) error {
 	l := log.With().Str("ctx", "webserver").Logger()
 
 	l.Info().Msg("initializing webserver...")
-	sv.auth.Start()
+	sv.passport.Start()
 	app := sv.newServer()
 	if err := app.Listen(":" + port); err != nil {
 		return err
@@ -42,7 +41,7 @@ func (sv *WebServer) StartAndListen(port string) error {
 func (sv *WebServer) Shutdown() error {
 	l := log.With().Str("ctx", "webserver").Logger()
 	l.Info().Msg("shutting down webserver...")
-	defer sv.auth.Stop()
+	defer sv.passport.Stop()
 	return sv.sv.Shutdown()
 }
 
@@ -95,10 +94,10 @@ func (sv *WebServer) newServer() *fiber.App {
 	app.Get(cfg.HealthEndpoint, func(c *fiber.Ctx) error {
 		return c.Status(http.StatusOK).Send([]byte("ok"))
 	})
-	app.Get(cfg.LoginEndpoint, sv.auth.WithAuth, sv.auth.Login)
-	app.Get(cfg.LogoutEndpoint, sv.auth.WithAuth, sv.auth.Logout)
+	app.Get(cfg.LoginEndpoint, sv.passport.WithAuth, sv.passport.Login)
+	app.Get(cfg.LogoutEndpoint, sv.passport.WithAuth, sv.passport.Logout)
 	auth := app.Group(cfg.AuthEndpoint)
-	auth.Get(cfg.AuthRedirectEndpoint, sv.auth.Callback)
+	auth.Get(cfg.AuthRedirectEndpoint, sv.passport.Callback)
 	l.Info().Msgf("websv health: %s", cfg.HealthEndpoint)
 	l.Info().Msgf("websv Login: %s", cfg.LoginEndpoint)
 	l.Info().Msgf("websv Callback: %s", cfg.AuthEndpoint+cfg.AuthRedirectEndpoint)
@@ -111,9 +110,9 @@ func (sv *WebServer) newServer() *fiber.App {
 	return app
 }
 
-func New(auth *auth.Passport) *WebServer {
+func New(p *auth.Passport) *WebServer {
 	sv := &WebServer{
-		auth: auth,
+		passport: p,
 	}
 	return sv
 }

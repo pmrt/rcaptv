@@ -3,6 +3,7 @@ include .env
 export
 
 pgmigrations := $(wildcard ./database/postgres/migrations/*.sql)
+protobuf := $(wildcard ./**/*.proto)
 
 .PHONY: tools test
 
@@ -14,6 +15,10 @@ gen: $(pgmigrations)
 # remove entire dir so make knows it has been updated
 	rm -rf /.gen
 	jet -dsn=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB_NAME}?sslmode=disable -schema=${POSTGRES_SCHEMA} -path=./gen
+
+gengrpc: $(protobuf)
+	@echo Detected change in protobuf files, generating protobuf and gRPC types
+	protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative **/pb/*.proto
 
 # migrate postgres 1 step down
 pgdown:
@@ -48,3 +53,12 @@ tools:
 # go migrate
 	@echo Installing go-migrate
 	go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+	@echo Installing protoc-gen and grpc-gen
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
+	export PATH="$PATH:$(go env GOPATH)/bin"
+	@echo Install protoc by your own please depending on your OS:
+	@echo Linux
+	@echo $ apt install -y protobuf-compiler
+	@echo MacOS with homebrew
+	@echo $ brew install protobuf

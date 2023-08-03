@@ -87,6 +87,9 @@ var (
 
 	BalancerSalt string
 
+	RPCAuthHost string
+	RPCAuthPort string
+
 	Debug bool
 )
 
@@ -243,6 +246,9 @@ func LoadVars() {
 	WebserverViewsDir = Env("WEBSERVER_VIEWS_DIR", "./views")
 	WebserverStaticDir = Env("WEBSERVER_STATIC_DIR", "./www")
 	WebserverIndexDir = Env("WEBSERVER_INDEX_PATH", "./www/index.html")
+
+	RPCAuthHost = Env("RPC_AUTH_HOST", "localhost")
+	RPCAuthPort = Env("RPC_AUTH_PORT", "4001")
 
 	BalancerSalt = Env("BALANCER_SALT", "fake_salt")
 

@@ -49,8 +49,8 @@ type API struct {
 
 	clipsMaxPeriodDiffHours int
 
-	sv   *fiber.App
-	auth *auth.Passport
+	sv       *fiber.App
+	passport *auth.Passport
 }
 
 type ResultsMode string
@@ -334,10 +334,12 @@ func (a *API) getClipParams(c *fiber.Ctx) (clipParams, []string) {
 	}, errors
 }
 
+// Starts the api server. Shutdown() must be handled.
 func (a *API) StartAndListen(port string) error {
 	l := log.With().Str("ctx", "apiserver").Logger()
 
 	l.Info().Msg("initializing apiserver...")
+	a.passport.Start()
 	app := a.newServer()
 	if err := app.Listen(":" + port); err != nil {
 		return err
@@ -348,6 +350,7 @@ func (a *API) StartAndListen(port string) error {
 func (a *API) Shutdown() error {
 	l := log.With().Str("ctx", "apiserver").Logger()
 	l.Info().Msg("shutting down apiserver...")
+	defer a.passport.Stop()
 	return a.sv.Shutdown()
 }
 
@@ -403,8 +406,8 @@ func (a *API) newServer() *fiber.App {
 	v1 := app.Group(cfg.APIEndpoint)
 	v1.Get(cfg.APIVodsEndpoint, a.Vods)
 
-	hx := v1.Group(cfg.APIHelixEndpoint, a.auth.WithAuth)
-	hx.Get(cfg.APIValidateEndpoint, a.auth.ValidateSession)
+	hx := v1.Group(cfg.APIHelixEndpoint, a.passport.WithAuth)
+	hx.Get(cfg.APIValidateEndpoint, a.passport.ValidateSession)
 	hx.Get(cfg.APIClipsEndpoint, a.Clips)
 
 	l.Info().Msgf("apisv health: %s", cfg.HealthEndpoint)
@@ -421,8 +424,8 @@ func New(auth *auth.Passport, opts APIOpts) *API {
 	}
 	db := opts.Storage.Conn()
 	api := &API{
-		auth: auth,
-		db:   db,
+		passport: auth,
+		db:       db,
 		hx: helix.NewWithUserTokens(&helix.HelixOpts{
 			Creds: helix.ClientCreds{
 				ClientID:     opts.ClientID,
