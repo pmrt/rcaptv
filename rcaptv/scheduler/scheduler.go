@@ -116,6 +116,9 @@ type BalancedScheduleOpts struct {
 
 	// Salt to be appended to keys.
 	Salt string
+
+	// Hook to be run after processing each op. Useful for testing
+	AfterOp func(op *Op)
 }
 
 type RealTimeMinute struct {
@@ -131,9 +134,9 @@ const (
 )
 
 type Op struct {
-	typ schedulerOp
-	key string
-	min Minute
+	Typ schedulerOp
+	Key string
+	Min Minute
 }
 
 type (
@@ -155,6 +158,9 @@ type Schedule struct {
 	picks    pickChan
 
 	realTime chan RealTimeMinute
+
+	readyCh chan struct{}
+	afterOp func(op *Op)
 }
 
 func (s *Schedule) add(min Minute, key string) {
@@ -191,17 +197,20 @@ func (s *Schedule) Worker(ctx context.Context, freq time.Duration, cycleSize uin
 	defer ticker.Stop()
 	m := ResetMinute
 	max := Minute(cycleSize - 1)
+
+	once := make(chan struct{}, 1)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case op := <-s.ops:
-			switch op.typ {
+			switch op.Typ {
 			case OpAdd:
-				s.add(op.min, op.key)
+				s.add(op.Min, op.Key)
 			case OpRemove:
-				s.remove(op.min, op.key)
+				s.remove(op.Min, op.Key)
 			}
+			s.afterOp(op)
 		case <-ticker.C:
 			select {
 			case s.realTime <- RealTimeMinute{Min: m, Objects: s.pick(m)}:
@@ -212,6 +221,17 @@ func (s *Schedule) Worker(ctx context.Context, freq time.Duration, cycleSize uin
 				m = ResetMinute
 			} else {
 				m++
+			}
+		case once <- struct{}{}:
+			// notify we're ready. readyCh is a channel that no goroutine will ever
+			// write, so it is safe to check if it is closed by trying to receive
+			// from it
+			select {
+			case <-s.readyCh:
+				// if closed this would never block and therefore never enter default
+			default:
+				// if not closed <-v.readyCh will block and enter here
+				close(s.readyCh)
 			}
 		}
 	}
@@ -280,9 +300,9 @@ func (bs *BalancedSchedule) send(op *Op) {
 // not a blocking op. Add is safe for concurrent access
 func (bs *BalancedSchedule) Add(key string) {
 	bs.send(&Op{
-		typ: OpAdd,
-		key: key,
-		min: bs.BalancedMin(key),
+		Typ: OpAdd,
+		Key: key,
+		Min: bs.BalancedMin(key),
 	})
 }
 
@@ -294,9 +314,9 @@ func (bs *BalancedSchedule) Add(key string) {
 // use StrategyCount.
 func (bs *BalancedSchedule) Remove(key string) {
 	bs.send(&Op{
-		typ: OpRemove,
-		key: key,
-		min: bs.BalancedMin(key),
+		Typ: OpRemove,
+		Key: key,
+		Min: bs.BalancedMin(key),
 	})
 }
 
@@ -350,6 +370,7 @@ func (bs *BalancedSchedule) Start() {
 		bs.resetContext(true)
 		close(bs.ctx.stopping)
 	}()
+	<-bs.internal.readyCh
 }
 
 func (bs *BalancedSchedule) context() context.Context {
@@ -412,9 +433,15 @@ func New(opts BalancedScheduleOpts) *BalancedSchedule {
 			ops:      make(opsChan),
 			picks:    make(pickChan),
 			realTime: make(chan RealTimeMinute),
+			readyCh:  make(chan struct{}),
+			afterOp:  func(op *Op) {},
 		},
 		salt: opts.Salt,
 		ctx:  new(SchedulerCtx),
+	}
+
+	if opts.AfterOp != nil {
+		bs.internal.afterOp = opts.AfterOp
 	}
 	return bs
 }
