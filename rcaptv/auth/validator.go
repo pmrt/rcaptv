@@ -33,6 +33,10 @@ type TokenValidator struct {
 	AfterCycle func(m scheduler.RealTimeMinute)
 	readyCh    ReadyCh
 
+	// skipLoadingUsers skips the process of retrieving users from database with
+	// non-expired tokens
+	skipLoadingUsers bool
+
 	l zerolog.Logger
 }
 
@@ -82,15 +86,18 @@ func (v *TokenValidator) Run() error {
 	v.resetContext(false)
 	v.l = log.With().Str("ctx", "token_validator").Logger()
 	v.l.Info().Msgf("initializing token validator (cycle:%dmin estimated_active_users:%d)", cycleSize, v.balancer.EstimatedObjects())
-	v.l.Info().Msg("validator: retrieving current active users")
-	usrs, err := repo.ActiveUsers(v.db)
-	if err != nil {
-		v.l.Panic().Msg(err.Error())
+
+	if !v.skipLoadingUsers {
+		v.l.Info().Msg("validator: retrieving current active users")
+		usrs, err := repo.ActiveUsers(v.db)
+		if err != nil {
+			v.l.Panic().Msg(err.Error())
+		}
+		for _, usr := range usrs {
+			v.AddUser(int64(usr.UserID))
+		}
+		v.l.Info().Msgf("validator: added:%d (balancer:%p)", len(usrs), v.balancer)
 	}
-	for _, usr := range usrs {
-		v.AddUser(int64(usr.UserID))
-	}
-	v.l.Info().Msgf("validator: added:%d (balancer:%p)", len(usrs), v.balancer)
 
 	ready := make(chan struct{}, 1)
 

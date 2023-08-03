@@ -12,9 +12,10 @@ import (
 )
 
 type CollectorCtx struct {
-	mu     sync.Mutex
-	ctx    context.Context
-	cancel context.CancelFunc
+	mu       sync.Mutex
+	ctx      context.Context
+	cancel   context.CancelFunc
+	stopping chan struct{}
 }
 
 type TokenCollector struct {
@@ -44,8 +45,9 @@ func (tc *TokenCollector) Run() {
 	for {
 		select {
 		case <-tc.context().Done():
-			tc.resetContext(true)
 			l.Info().Msg("token collector stopped")
+			tc.resetContext(true)
+			close(tc.ctx.stopping)
 			return
 		case <-ticker.C:
 			if n, err = tc.Collect(); err != nil {
@@ -72,16 +74,19 @@ func (tc *TokenCollector) resetContext(empty bool) {
 		tc.ctx.ctx, tc.ctx.cancel = nil, nil
 	} else {
 		tc.ctx.ctx, tc.ctx.cancel = context.WithCancel(context.Background())
+		tc.ctx.stopping = make(chan struct{})
 	}
 }
 
 // Stop the collector. Stop is idempotent
 func (tc *TokenCollector) Stop() {
 	tc.ctx.mu.Lock()
-	defer tc.ctx.mu.Unlock()
 	if tc.ctx.ctx != nil && tc.ctx.cancel != nil {
 		tc.ctx.cancel()
 	}
+	tc.ctx.mu.Unlock()
+
+	<-tc.ctx.stopping
 }
 
 func NewCollector(db *sql.DB, freq time.Duration) *TokenCollector {
