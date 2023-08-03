@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"github.com/spaolacci/murmur3"
 
 	"pedro.to/rcaptv/utils"
@@ -122,26 +123,41 @@ type RealTimeMinute struct {
 	Objects []string
 }
 
+type schedulerOp int
+
+const (
+	OpAdd schedulerOp = iota
+	OpRemove
+)
+
+type Op struct {
+	typ schedulerOp
+	key string
+	min Minute
+}
+
 type (
 	ScheduleMap    map[Minute][]string
 	KeyToMinuteMap map[string]Minute
+	opsChan        chan *Op
+	pickChan       chan []string
 )
 
-// TODO: remove Schedule mutex. We can sync access with channels (buffered op
-// channel for add/remove) and allow only the scheduler goroutine to access the
-// map
+// Schedule is a schedule map.
 //
-// Schedule is a guarded schedule map, safe for concurrent access
+// IMPORTANT: Schedule is not safe for concurrent access, ensure that only 1
+// goroutine access the contents at the same time.
 type Schedule struct {
-	mu       sync.Mutex
 	schedule ScheduleMap
 	// denormalize. More memory required, O(1) Add operations
 	keyToMin KeyToMinuteMap
+	ops      opsChan
+	picks    pickChan
+
+	realTime chan RealTimeMinute
 }
 
-func (s *Schedule) Add(min Minute, key string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *Schedule) add(min Minute, key string) {
 	// O(1)
 	if _, found := s.keyToMin[key]; !found {
 		s.schedule[min] = append(s.schedule[min], key)
@@ -149,27 +165,63 @@ func (s *Schedule) Add(min Minute, key string) {
 	}
 }
 
-func (s *Schedule) Remove(min Minute, key string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *Schedule) remove(min Minute, key string) {
 	// O(n); n = len(s.schedule[min])
 	s.schedule[min] = utils.RemoveKey(s.schedule[min], key)
 	delete(s.keyToMin, key)
 }
 
-func (s *Schedule) Pick(min Minute) []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *Schedule) pick(min Minute) []string {
 	orig := s.schedule[min]
 	clone := make([]string, len(orig))
 	copy(clone, orig)
 	return clone
 }
 
-// return a clone of current contents of schedule. Useful for testing
-func (s *Schedule) TestSchedule() ScheduleMap {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *Schedule) RealTime() <-chan RealTimeMinute {
+	return s.realTime
+}
+
+// Worker of schedule.
+//
+// IMPORTANT: only this goroutine should access contents at the same time
+func (s *Schedule) Worker(ctx context.Context, freq time.Duration, cycleSize uint) {
+	l := log.With().Str("ctx", "scheduler").Logger()
+	ticker := time.NewTicker(freq)
+	defer ticker.Stop()
+	m := ResetMinute
+	max := Minute(cycleSize - 1)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case op := <-s.ops:
+			switch op.typ {
+			case OpAdd:
+				s.add(op.min, op.key)
+			case OpRemove:
+				s.remove(op.min, op.key)
+			}
+		case <-ticker.C:
+			select {
+			case s.realTime <- RealTimeMinute{Min: m, Objects: s.pick(m)}:
+			default:
+				l.Warn().Msgf("WARN: discarding minute (min:%d) because 'realTime' channel is blocked.", m)
+			}
+			if m >= max {
+				m = ResetMinute
+			} else {
+				m++
+			}
+		}
+	}
+}
+
+// return a clone of current contents of schedule.
+//
+// Use only for testing and after stopping scheduler, not safe for concurrent
+// access.
+func (s *Schedule) UnsafeSchedule() ScheduleMap {
 	clone := make(ScheduleMap, len(s.schedule))
 	for k, v := range s.schedule {
 		clone[k] = v
@@ -177,10 +229,11 @@ func (s *Schedule) TestSchedule() ScheduleMap {
 	return clone
 }
 
-// return a clone of current contents of keyToMinute. Useful for testing
-func (s *Schedule) TestKeyToMinute() KeyToMinuteMap {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// return a clone of current contents of keyToMinute.
+//
+// Use only for testing and after stopping scheduler, not safe for concurrent
+// access.
+func (s *Schedule) UnsafeKeyToMinute() KeyToMinuteMap {
 	clone := make(KeyToMinuteMap, len(s.keyToMin))
 	for k, v := range s.keyToMin {
 		clone[k] = v
@@ -189,46 +242,62 @@ func (s *Schedule) TestKeyToMinute() KeyToMinuteMap {
 }
 
 type SchedulerCtx struct {
-	mu     sync.Mutex
-	ctx    context.Context
-	cancel context.CancelFunc
+	mu       sync.Mutex
+	ctx      context.Context
+	cancel   context.CancelFunc
+	stopping chan struct{}
 }
 
 // BalancedSchedule balances the objects in a given cycle size. Objects can
 // be hot-added while the scheduler is running.
 //
-// Start real-time scheduler with bs.Start().
+// Start real-time scheduler with bs.Start(). Read live minutes with bs.RealTime()
 //
 // Balance is determined by opts.BalanceStrategy balancer. The default balancer
 // is a deterministic count balancer.
+//
+// BalanceSchedule is safe for concurrent access
 type BalancedSchedule struct {
-	internal       *Schedule
-	realTime       chan RealTimeMinute
-	cancelRealTime chan struct{}
-	ctx            *SchedulerCtx
-	salt           string
+	internal *Schedule
+	ctx      *SchedulerCtx
+	salt     string
 
 	opts BalancedScheduleOpts
 }
 
-// Add adds the key element to the schedule if it is not already in it
-func (bs *BalancedSchedule) Add(key string) {
-	min := bs.BalancedMin(key)
-	bs.internal.Add(min, key)
+func (bs *BalancedSchedule) send(op *Op) {
+	// execute in a different goroutine to prevent the current goroutine from
+	// blocking. It also holds only the needed values to keep memory footprint as
+	// small as possible if blocking go-routines start to pile up. We could have
+	// the same effect with a buffered channel, but then we would have to keep an
+	// eye on the buffer size
+	go func(op *Op) {
+		bs.internal.ops <- op
+	}(op)
 }
 
-// Remove removes the key element from the schedule.
+// Add adds the key element to the schedule if it is not already in it. Add is
+// not a blocking op. Add is safe for concurrent access
+func (bs *BalancedSchedule) Add(key string) {
+	bs.send(&Op{
+		typ: OpAdd,
+		key: key,
+		min: bs.BalancedMin(key),
+	})
+}
+
+// Remove removes the key element from the schedule. Remove is not a blocking
+// op. Remove is safe for concurrent access.
 //
 // IMPORTANT: For this feature to work a deterministic balancer is required.
 // Use e.g. StrategyMurmur not StrategyCount. If you only add items you can
 // use StrategyCount.
 func (bs *BalancedSchedule) Remove(key string) {
-	min := bs.BalancedMin(key)
-	bs.internal.Remove(min, key)
-}
-
-func (bs *BalancedSchedule) Pick(min Minute) []string {
-	return bs.internal.Pick(min)
+	bs.send(&Op{
+		typ: OpRemove,
+		key: key,
+		min: bs.BalancedMin(key),
+	})
 }
 
 func (bs *BalancedSchedule) BalancedMin(key string) Minute {
@@ -239,7 +308,7 @@ func (bs *BalancedSchedule) BalancedMin(key string) Minute {
 }
 
 func (bs *BalancedSchedule) RealTime() <-chan RealTimeMinute {
-	return bs.realTime
+	return bs.internal.RealTime()
 }
 
 func (bs *BalancedSchedule) CycleSize() uint {
@@ -250,12 +319,20 @@ func (bs *BalancedSchedule) EstimatedObjects() uint {
 	return bs.opts.EstimatedObjects
 }
 
-func (bs *BalancedSchedule) TestSchedule() ScheduleMap {
-	return bs.internal.TestSchedule()
+// return a clone of current contents of schedule.
+//
+// Use only for testing and after stopping scheduler, not safe for concurrent
+// access.
+func (bs *BalancedSchedule) UnsafeSchedule() ScheduleMap {
+	return bs.internal.UnsafeSchedule()
 }
 
-func (bs *BalancedSchedule) TestKeyToMinute() KeyToMinuteMap {
-	return bs.internal.TestKeyToMinute()
+// return a clone of current contents of keyToMinute.
+//
+// Use only for testing and after stopping scheduler, not safe for concurrent
+// access.
+func (bs *BalancedSchedule) UnsafeKeyToMinute() KeyToMinuteMap {
+	return bs.internal.UnsafeKeyToMinute()
 }
 
 // Starts real-time scheduler.
@@ -267,25 +344,11 @@ func (bs *BalancedSchedule) TestKeyToMinute() KeyToMinuteMap {
 // The scheduler must be stopped with bs.Stop()
 func (bs *BalancedSchedule) Start() {
 	bs.resetContext(false)
-	ticker := time.NewTicker(bs.opts.Freq)
-	m := ResetMinute
-	max := Minute(bs.opts.CycleSize - 1)
+	ctx := bs.context()
 	go func() {
-		defer ticker.Stop()
-		for {
-			select {
-			case <-bs.context().Done():
-				bs.resetContext(true)
-				return
-			case <-ticker.C:
-				bs.realTime <- RealTimeMinute{Min: m, Objects: bs.Pick(m)}
-				if m >= max {
-					m = ResetMinute
-				} else {
-					m++
-				}
-			}
-		}
+		bs.internal.Worker(ctx, bs.opts.Freq, bs.opts.CycleSize)
+		bs.resetContext(true)
+		close(bs.ctx.stopping)
 	}()
 }
 
@@ -302,16 +365,18 @@ func (bs *BalancedSchedule) resetContext(empty bool) {
 		bs.ctx.ctx, bs.ctx.cancel = nil, nil
 	} else {
 		bs.ctx.ctx, bs.ctx.cancel = context.WithCancel(context.Background())
+		bs.ctx.stopping = make(chan struct{})
 	}
 }
 
 // Stop the scheduler. Stop is idempotent
 func (bs *BalancedSchedule) Stop() {
 	bs.ctx.mu.Lock()
-	defer bs.ctx.mu.Unlock()
 	if bs.ctx.ctx != nil && bs.ctx.cancel != nil {
 		bs.ctx.cancel()
 	}
+	bs.ctx.mu.Unlock()
+	<-bs.ctx.stopping
 }
 
 func New(opts BalancedScheduleOpts) *BalancedSchedule {
@@ -344,10 +409,12 @@ func New(opts BalancedScheduleOpts) *BalancedSchedule {
 		internal: &Schedule{
 			schedule: pre,
 			keyToMin: make(KeyToMinuteMap),
+			ops:      make(opsChan),
+			picks:    make(pickChan),
+			realTime: make(chan RealTimeMinute),
 		},
-		realTime: make(chan RealTimeMinute),
-		salt:     opts.Salt,
-		ctx:      new(SchedulerCtx),
+		salt: opts.Salt,
+		ctx:  new(SchedulerCtx),
 	}
 	return bs
 }

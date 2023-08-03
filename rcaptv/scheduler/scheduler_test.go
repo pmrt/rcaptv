@@ -32,18 +32,21 @@ func deduplicate(s []string) []string {
 func TestScheduleAddRemove(t *testing.T) {
 	t.Parallel()
 	var (
-		cycleSize  uint = 10
-		estimation uint = uint(len(usernames) + 10)
+		cycleSize    uint          = 10
+		estimation   uint          = uint(len(usernames) + 10)
+		pickInterval time.Duration = 25 * time.Millisecond
 	)
 
 	bs := New(BalancedScheduleOpts{
 		CycleSize:        cycleSize,
 		EstimatedObjects: estimation,
 		BalanceStrategy:  StrategyMurmur(uint32(cycleSize)),
+		Freq:             pickInterval,
 	})
 	for _, username := range usernames {
 		bs.Add(username)
 	}
+	bs.Start()
 
 	targets := []string{
 		"silenthillscreamsx",
@@ -52,20 +55,50 @@ func TestScheduleAddRemove(t *testing.T) {
 	}
 	min := Minute(3)
 
+	timeout := time.After(time.Second * 3)
+	objs := make([]string, 0, 100)
+Cycle:
+	for {
+		select {
+		case <-timeout:
+			bs.Stop()
+			break Cycle
+		case m := <-bs.RealTime():
+			if m.Min == min {
+				objs = append(objs, m.Objects...)
+			}
+		}
+	}
+
 	for _, usr := range targets {
-		if idx := utils.Find(bs.internal.schedule[min], usr); idx == -1 {
+		if idx := utils.Find(objs, usr); idx == -1 {
 			t.Fatalf("user %s expected and not found", usr)
 		}
 	}
 
-	t.Logf("before remove:\n%s", spew.Sdump(bs.internal.schedule[min]))
+	bs.Start()
+	t.Logf("before remove:\n%s", spew.Sdump(objs))
 	for _, usr := range targets {
 		bs.Remove(usr)
 	}
-	t.Logf("after remove:\n%s", spew.Sdump(bs.internal.schedule[min]))
+	timeout = time.After(time.Second * 3)
+	objs = make([]string, 0, 100)
+Cycle2:
+	for {
+		select {
+		case <-timeout:
+			bs.Stop()
+			break Cycle2
+		case m := <-bs.RealTime():
+			if m.Min == min {
+				objs = append(objs, m.Objects...)
+			}
+		}
+	}
+	t.Logf("after remove:\n%s", spew.Sdump(objs))
 
 	for _, usr := range targets {
-		if idx := utils.Find(bs.internal.schedule[min], usr); idx != -1 {
+		if idx := utils.Find(objs, usr); idx != -1 {
 			t.Fatalf("user %s NOT expected and found", usr)
 		}
 	}
@@ -75,22 +108,38 @@ func TestBalancedMinDistribution(t *testing.T) {
 	t.Parallel()
 
 	var (
-		cycleSize  uint = 10
-		estimation uint = uint(len(usernames) + 10)
+		cycleSize    uint          = 10
+		estimation   uint          = uint(len(usernames) + 10)
+		pickInterval time.Duration = time.Millisecond * 25
 	)
-
 	bs := New(BalancedScheduleOpts{
 		CycleSize:        cycleSize,
 		EstimatedObjects: estimation,
+		Freq:             pickInterval,
 	})
+	bs.Start()
 	for _, username := range usernames {
 		bs.Add(username)
 	}
+
+	timeout := time.After(time.Second * 3)
+Cycle2:
+	for {
+		select {
+		case <-timeout:
+			bs.Stop()
+			break Cycle2
+		case <-bs.RealTime():
+			// drain realtime minutes
+		}
+	}
+
+	schedule := bs.UnsafeSchedule()
+
 	totalLen := len(usernames)
 	threshold := 5
-
 	dim := make([]int, 0, cycleSize)
-	for _, streamers := range bs.internal.schedule {
+	for _, streamers := range schedule {
 		l := len(streamers)
 		dim = append(dim, len(streamers))
 
@@ -111,7 +160,7 @@ func TestBalancedMinDistribution(t *testing.T) {
 	}
 	if std > 5 {
 		t.Log(dim)
-		t.Log(bs.internal.schedule)
+		t.Log(schedule)
 		t.Logf("std: %f", std)
 		t.Fatal("unbalanced distribution")
 	}
@@ -121,24 +170,40 @@ func TestBalancedLowEstimation(t *testing.T) {
 	t.Parallel()
 
 	var (
-		cycleSize  uint = 1200
-		estimation uint = uint(len(usernames))
+		cycleSize    uint          = 1200
+		estimation   uint          = uint(len(usernames))
+		pickInterval time.Duration = 25 * time.Millisecond
 	)
 
 	bs := New(BalancedScheduleOpts{
 		CycleSize:        cycleSize,
 		EstimatedObjects: estimation,
+		Freq:             pickInterval,
 	})
+	if bs.opts.CycleSize != estimation {
+		t.Fatal("expected cycle size to be equal to estimated streamers when estimation is lower than cycle size")
+	}
+	bs.Start()
 	for _, username := range usernames {
 		bs.Add(username)
 	}
 
-	if bs.opts.CycleSize != estimation {
-		t.Fatal("expected cycle size to be equal to estimated streamers when estimation is lower than cycle size")
+	timeout := time.After(time.Second * 3)
+Cycle2:
+	for {
+		select {
+		case <-timeout:
+			bs.Stop()
+			break Cycle2
+		case <-bs.RealTime():
+			// drain realtime minutes
+		}
 	}
 
+	schedule := bs.UnsafeSchedule()
+
 	dim := make([]int, 0, bs.opts.CycleSize)
-	for _, streamers := range bs.internal.schedule {
+	for _, streamers := range schedule {
 		l := len(streamers)
 		if l != 1 {
 			t.Log(dim)

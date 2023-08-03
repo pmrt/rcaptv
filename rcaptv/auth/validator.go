@@ -126,6 +126,12 @@ func (v *TokenValidator) cycle(m scheduler.RealTimeMinute) {
 	}
 	ctx := v.context()
 	for _, usrid := range m.Objects {
+		// NOTE: this path may become very slow if we have lots of concurrent
+		// active users that need validation. The roundtrip to twitch API is the
+		// slowest part here. If scheduler starts to warn about realTime minute
+		// discards we should make this faster. Maybe parallel queries? If that's
+		// not enough we could factorize validator service into multiple instances
+		// and distribute queries across instances
 		idstr := usrid // keep ref to str for parsing errors
 		usrid, err := strconv.ParseInt(idstr, 10, 64)
 		if err != nil {

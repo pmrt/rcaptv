@@ -103,8 +103,8 @@ func TestTokenValidator(t *testing.T) {
 	}()
 	wg.Wait()
 
-	schedule := tv.balancer.TestSchedule()
-	keyToMin := tv.balancer.TestKeyToMinute()
+	schedule := tv.balancer.UnsafeSchedule()
+	keyToMin := tv.balancer.UnsafeKeyToMinute()
 	t.Logf("schedule\n%s", spew.Sdump(schedule))
 	t.Logf("keyToMin\n%s", spew.Sdump(keyToMin))
 
@@ -145,8 +145,8 @@ func TestTokenValidator(t *testing.T) {
 	}()
 	wg.Wait()
 
-	schedule = tv.balancer.TestSchedule()
-	keyToMin = tv.balancer.TestKeyToMinute()
+	schedule = tv.balancer.UnsafeSchedule()
+	keyToMin = tv.balancer.UnsafeKeyToMinute()
 	t.Logf("schedule\n%s", spew.Sdump(schedule))
 	t.Logf("keyToMin\n%s", spew.Sdump(keyToMin))
 
