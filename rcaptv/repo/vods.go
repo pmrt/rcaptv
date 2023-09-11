@@ -17,8 +17,7 @@ type VodsParams struct {
 	BcUsername string
 	// If Extend > 0, Vods() will use `created_at` column of the last VOD
 	// obtained and append the `Extend` number of VODs following the `created_at`
-	// timestamp order. Extend won't work for Vods() querying by BcUsername, it's
-	// mostly useful for queries with a single videoID
+	// timestamp order.
 	Extend int
 	First  int
 	// After returns the First rows after `after` videoID
@@ -34,35 +33,40 @@ func Vods(db *sql.DB, p *VodsParams) ([]*helix.VOD, error) {
 	if p.Context == nil {
 		p.Context = context.Background()
 	}
-	if p.BcUsername != "" {
-		return vodsByStreamer(db, p.Context, p)
-	}
-	stmt := SELECT(
-		tbl.Vods.AllColumns,
-	).FROM(tbl.Vods)
-	if p.After != "" {
-		p.VideoIDs = []string{p.After}
-	}
-	if l := len(p.VideoIDs); l > 0 {
-		ids := make([]Expression, 0, l)
-		for _, v := range p.VideoIDs {
-			ids = append(ids, String(v))
-		}
-		stmt = stmt.WHERE(
-			tbl.Vods.VideoID.IN(ids...),
-		)
-	}
-	if bid := p.BcID; bid != "" {
-		stmt = stmt.WHERE(
-			tbl.Vods.BcID.EQ(String(bid)),
-		)
-	}
-	stmt = stmt.ORDER_BY(tbl.Vods.CreatedAt.DESC()).
-		LIMIT(int64(p.First))
-
 	var r []*helix.VOD
-	if err := stmt.QueryContext(p.Context, db, &r); err != nil {
-		return nil, err
+	var err error
+
+	if p.BcUsername != "" {
+		if r, err = vodsByStreamer(db, p.Context, p); err != nil {
+			return nil, err
+		}
+	} else {
+		stmt := SELECT(
+			tbl.Vods.AllColumns,
+		).FROM(tbl.Vods)
+		if p.After != "" {
+			p.VideoIDs = []string{p.After}
+		}
+		if l := len(p.VideoIDs); l > 0 {
+			ids := make([]Expression, 0, l)
+			for _, v := range p.VideoIDs {
+				ids = append(ids, String(v))
+			}
+			stmt = stmt.WHERE(
+				tbl.Vods.VideoID.IN(ids...),
+			)
+		}
+		if bid := p.BcID; bid != "" {
+			stmt = stmt.WHERE(
+				tbl.Vods.BcID.EQ(String(bid)),
+			)
+		}
+		stmt = stmt.ORDER_BY(tbl.Vods.CreatedAt.DESC()).
+			LIMIT(int64(p.First))
+
+		if err = stmt.QueryContext(p.Context, db, &r); err != nil {
+			return nil, err
+		}
 	}
 
 	if len(r) > 0 {
