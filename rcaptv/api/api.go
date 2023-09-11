@@ -255,9 +255,9 @@ func (a *API) localClips(c *fiber.Ctx) error {
 	resp.Data.Clips = make([]*helix.Clip, 0, 1)
 	resp.Mode = ModeLocal
 
-	params, errors := a.getClipParams(c)
-	if len(errors) > 0 {
-		resp.Errors = errors
+	params, errs := a.getClipParams(c)
+	if len(errs) > 0 {
+		resp.Errors = errs
 		return c.Status(http.StatusBadRequest).JSON(resp)
 	}
 
@@ -272,10 +272,18 @@ func (a *API) localClips(c *fiber.Ctx) error {
 		resp.Errors = append(resp.Errors, "Unexpected error while retrieving local clips")
 		return c.JSON(resp)
 	}
+	if len(localClips) == 0 {
+		resp.Errors = append(resp.Errors,
+			fmt.Sprintf("No clips found for the provided streamer (bid:'%s'). Check if the streamer has clips enabled. If it does, try logging in using the 'login with Twitch' button for the hybrid mode, which allows us to perform requests directly to the Twitch API with more flexible rate limits.",
+				params.bid),
+		)
+		return c.Status(http.StatusNotFound).JSON(resp)
+	}
 	resp.Data.Clips = localClips
 	return c.Status(http.StatusOK).JSON(resp)
 }
 
+// checkErr checks errors for helix and session state
 func (a *API) checkErr(c *fiber.Ctx, err error) error {
 	if err == nil {
 		return nil
