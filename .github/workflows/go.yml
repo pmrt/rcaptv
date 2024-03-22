@@ -33,7 +33,7 @@ jobs:
       env:
         TEST_CLIENT_ID: ${{ secrets.TEST_CLIENT_ID }}
         TEST_CLIENT_SECRET: ${{ secrets.TEST_CLIENT_SECRET }}
-        API_URL: https://api.twitch.tv/helix
+        TWITCH_API_URL: https://api.twitch.tv/helix
         EVENTSUB_ENDPOINT: /eventsub
       run: go test -timeout 30s -v ./...
       
