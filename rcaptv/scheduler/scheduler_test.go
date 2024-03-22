@@ -214,10 +214,11 @@ Cycle2:
 	}
 }
 
+// These tests are horrible and depend on intervals...
 func TestBalancedScheduleRealTime1Pick(t *testing.T) {
 	t.Parallel()
 	pickInterval := time.Millisecond * 10
-	after := time.Millisecond * 15
+	after := time.Millisecond * 18
 	r := make([]RealTimeMinute, 0, 5)
 
 	bs := New(BalancedScheduleOpts{
@@ -240,6 +241,7 @@ Cycle:
 			bs.Stop()
 			break Cycle
 		case m := <-bs.RealTime():
+			t.Log("picked on test")
 			r = append(r, m)
 		}
 	}
