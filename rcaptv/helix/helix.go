@@ -252,6 +252,10 @@ PaginationLoop:
 
 		items := parsed.Data
 		if len(items) == 0 {
+			if len(all) != 0 {
+				// no more items but we have data from previous iterations, proceed
+				break PaginationLoop
+			}
 			return nil, ErrItemsEmpty
 		}
 		for _, item := range parsed.Data {
