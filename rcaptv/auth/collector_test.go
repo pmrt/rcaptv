@@ -90,6 +90,17 @@ func TestTokenCollectorRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	tks, err = repo.TokenPair(db, repo.TokenPairParams{
+		UserID:  id,
+		Invalid: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tks) != 4 {
+		t.Fatalf("expected 2 valid tokens + 2 invalid tokens, got %d", len(tks))
+	}
+
 	wg.Add(1)
 	go func() {
 		tc.Run()
@@ -106,9 +117,6 @@ func TestTokenCollectorRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(tks) != 2 {
-		t.Fatalf("expected 2 valid tokens, got %d", len(tks))
-	}
-	if tc.lastCollected != 2 {
-		t.Fatalf("expected token collector to have collected 2 tokens, got:%d", tc.lastCollected)
+		t.Fatalf("expected 2 valid tokens + 0 invalid tokens, got %d", len(tks))
 	}
 }
