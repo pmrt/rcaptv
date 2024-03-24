@@ -96,12 +96,18 @@ var (
 var Scopes = []string{"user:read:email"}
 
 func OAuthConfig() *oauth2.Config {
+	redirect := ""
+	if IsProd {
+		redirect = fmt.Sprintf("%s%s%s", BaseURL, AuthEndpoint, AuthRedirectEndpoint)
+	} else {
+		redirect = fmt.Sprintf("%s:%s%s%s", BaseURL, WebserverPort, AuthEndpoint, AuthRedirectEndpoint)
+	}
 	return &oauth2.Config{
 		ClientID:     HelixClientID,
 		ClientSecret: HelixClientSecret,
 		Scopes:       Scopes,
 		Endpoint:     twitch.Endpoint,
-		RedirectURL:  fmt.Sprintf("%s:%s%s%s", BaseURL, WebserverPort, AuthEndpoint, AuthRedirectEndpoint),
+		RedirectURL:  redirect,
 	}
 }
 
