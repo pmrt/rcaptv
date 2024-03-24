@@ -57,6 +57,7 @@ func (sv *WebServer) newServer() *fiber.App {
 		BodyLimit:       4 * 1024 * 1024,
 		Concurrency:     256 * 1024,
 		Views:           engine,
+		ProxyHeader:     fiber.HeaderXForwardedFor,
 	})
 	if cfg.IsProd {
 		// in-memory ratelimiter for production. Use redis if needed in the future

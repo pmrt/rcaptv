@@ -372,6 +372,7 @@ func (a *API) newServer() *fiber.App {
 		WriteBufferSize: 4096,
 		BodyLimit:       4 * 1024 * 1024,
 		Concurrency:     256 * 1024,
+		ProxyHeader:     fiber.HeaderXForwardedFor,
 	})
 	if cfg.IsProd {
 		// in-memory ratelimiter for production. Use redis if needed in the future
